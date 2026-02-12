@@ -36,23 +36,25 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
     <title>Project Control</title>
     <style>
       :root {
-        --bg: #0e1118;
-        --panel: #141a26;
-        --panel-2: #101624;
-        --muted: #8ea0bb;
-        --text: #dce6f4;
-        --line: #253149;
-        --accent: #3ea6ff;
-        --danger: #ff6b6b;
-        --low: #6cc070;
-        --medium: #f0b14b;
-        --high: #ff7d7d;
+        --bg: #1a1b26;
+        --bg-dark: #16161e;
+        --panel: #1f2335;
+        --panel-2: #24283b;
+        --muted: #a9b1d6;
+        --text: #c0caf5;
+        --line: #2f3549;
+        --accent: #7aa2f7;
+        --danger: #f7768e;
+        --success: #9ece6a;
+        --low: #9ece6a;
+        --medium: #e0af68;
+        --high: #f7768e;
       }
       * { box-sizing: border-box; }
       body {
         margin: 0;
         font-family: "Segoe UI", Tahoma, sans-serif;
-        background: radial-gradient(circle at top right, #16243f 0%, var(--bg) 45%);
+        background: radial-gradient(circle at top right, #24283b 0%, var(--bg) 48%);
         color: var(--text);
       }
       .app {
@@ -65,7 +67,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         gap: 10px;
         padding: 10px 14px;
         border-bottom: 1px solid var(--line);
-        background: rgba(10, 16, 27, 0.7);
+        background: rgba(26, 27, 38, 0.9);
       }
       .tab {
         border: 1px solid transparent;
@@ -78,7 +80,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
       .tab.active {
         color: var(--text);
         border-color: var(--line);
-        background: #162039;
+        background: #283457;
       }
       .view { display: none; height: calc(100vh - 54px); overflow: hidden; }
       .view.active { display: block; }
@@ -102,22 +104,22 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
       }
       textarea { width: 100%; min-height: 90px; resize: vertical; }
       .btn {
-        background: #1b2740;
+        background: #2a3148;
         border: 1px solid var(--line);
         color: var(--text);
         border-radius: 8px;
         padding: 8px 10px;
         cursor: pointer;
       }
-      .btn:hover { border-color: #3a4b6d; }
-      .btn.danger { color: #ffd2d2; border-color: #6f2d2d; background: #351d22; }
+      .btn:hover { border-color: #3b4261; }
+      .btn.danger { color: #ffd5dc; border-color: #6b2e46; background: #3b2230; }
       .columns {
         display: grid;
         grid-template-columns: repeat(4, minmax(220px, 1fr));
         gap: 10px;
       }
       .col {
-        background: rgba(18, 25, 38, 0.9);
+        background: rgba(31, 35, 53, 0.95);
         border: 1px solid var(--line);
         border-radius: 10px;
         min-height: 420px;
@@ -135,7 +137,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
       }
       .card {
         background: var(--panel-2);
-        border: 1px solid #293754;
+        border: 1px solid #3b4261;
         border-radius: 9px;
         padding: 10px;
         margin-bottom: 8px;
@@ -175,7 +177,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
       .details-error {
         margin-top: 6px;
         font-size: 12px;
-        color: #ff9b9b;
+        color: #f7768e;
       }
       .detail-grid {
         display: grid;
@@ -189,7 +191,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         gap: 8px;
       }
       .mini-activity { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
-      .act-item { font-size: 12px; color: #bfd0ea; padding: 6px 0; border-bottom: 1px solid #1f2a42; }
+      .act-item { font-size: 12px; color: #c0caf5; padding: 6px 0; border-bottom: 1px solid #2f3549; }
       .empty {
         padding: 20px;
         border: 1px dashed var(--line);
@@ -237,19 +239,19 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         margin-bottom: 10px;
       }
       .activity-card {
-        background: rgba(18, 25, 38, 0.9);
+        background: rgba(31, 35, 53, 0.95);
         border: 1px solid var(--line);
         border-radius: 10px;
         padding: 12px;
         margin-bottom: 10px;
       }
-      .link-list a { color: #8ac8ff; }
+      .link-list a { color: #7dcfff; }
       .check-item { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
       .check-item span { flex: 1; }
       .check-delete {
-        border: 1px solid #6f2d2d;
-        background: #351d22;
-        color: #ffd2d2;
+        border: 1px solid #6b2e46;
+        background: #3b2230;
+        color: #ffd5dc;
         border-radius: 6px;
         padding: 2px 8px;
         cursor: pointer;
@@ -270,14 +272,14 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         z-index: 10;
       }
       .toast {
-        background: #111a2c;
-        border: 1px solid #2a3d61;
+        background: #24283b;
+        border: 1px solid #3b4261;
         border-radius: 8px;
         padding: 8px 10px;
         font-size: 12px;
       }
-      .toast.error { border-color: #7a3030; color: #ffd0d0; }
-      .toast.success { border-color: #2d6b3f; color: #c9f3d6; }
+      .toast.error { border-color: #6b2e46; color: #ffd5dc; }
+      .toast.success { border-color: #3f5f3b; color: #d6f1c7; }
     </style>
   </head>
   <body>
