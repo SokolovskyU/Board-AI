@@ -15,11 +15,11 @@ let sessionAutoOpened = false;
 
 export function activate(context: vscode.ExtensionContext): void {
   const openDisposable = vscode.commands.registerCommand("projectControl.open", async () => {
-    await openProjectControlPanel(context);
+    await openProjectControlPanel(context, true);
   });
 
   const ingestDisposable = vscode.commands.registerCommand("projectControl.ingestPrompt", async () => {
-    const storage = getStorageOrNotify();
+    const storage = getStorageOrNotify(true);
     if (!storage) {
       return;
     }
@@ -40,12 +40,15 @@ export function activate(context: vscode.ExtensionContext): void {
   const autoOpen = vscode.workspace.getConfiguration("projectControl").get<boolean>("autoOpen", true);
   if (autoOpen && !sessionAutoOpened) {
     sessionAutoOpened = true;
-    void openProjectControlPanel(context);
+    void openProjectControlPanel(context, false);
   }
 }
 
-async function openProjectControlPanel(context: vscode.ExtensionContext): Promise<void> {
-  const storage = getStorageOrNotify();
+async function openProjectControlPanel(
+  context: vscode.ExtensionContext,
+  notifyOnMissingWorkspace: boolean
+): Promise<void> {
+  const storage = getStorageOrNotify(notifyOnMissingWorkspace);
   if (!storage) {
     return;
   }
@@ -83,10 +86,12 @@ function getWorkspaceRoot(): vscode.Uri | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri;
 }
 
-function getStorageOrNotify(): ProjectControlStorage | undefined {
+function getStorageOrNotify(notifyOnMissingWorkspace: boolean): ProjectControlStorage | undefined {
   const root = getWorkspaceRoot();
   if (!root) {
-    void vscode.window.showWarningMessage("Project Control requires an opened workspace folder.");
+    if (notifyOnMissingWorkspace) {
+      void vscode.window.showWarningMessage("Project Control requires an opened workspace folder.");
+    }
     return undefined;
   }
   return new ProjectControlStorage(root);
