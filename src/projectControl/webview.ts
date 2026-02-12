@@ -231,6 +231,19 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
       }
       .link-list a { color: #8ac8ff; }
       .check-item { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+      .check-item span { flex: 1; }
+      .check-delete {
+        border: 1px solid #6f2d2d;
+        background: #351d22;
+        color: #ffd2d2;
+        border-radius: 6px;
+        padding: 2px 8px;
+        cursor: pointer;
+      }
+      .check-create { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 8px; }
+      .doc-state { font-size: 12px; color: var(--muted); margin-left: auto; }
+      .doc-state.unsaved { color: var(--medium); }
+      .doc-state.saving { color: var(--accent); }
       .muted { color: var(--muted); }
       .row { display: flex; gap: 8px; }
     </style>
@@ -276,7 +289,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
           <div class="doc-editor">
             <div class="row">
               <strong id="doc-title">Main Document</strong>
-              <button class="btn" id="save-doc-btn">Save</button>
+              <span class="doc-state" id="doc-save-state">Saved</span>
             </div>
             <div class="doc-split">
               <textarea id="doc-editor" spellcheck="false"></textarea>
@@ -300,8 +313,12 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         priorityFilter: "all",
         docs: [],
         selectedDoc: "__main__",
-        docDraft: ""
+        docDraft: "",
+        docDirty: false,
+        docSaving: false,
+        docSaveTimer: null
       };
+      const DOC_SAVE_DEBOUNCE_MS = 600;
 
       const statusOrder = ["backlog", "todo", "inprogress", "done"];
       const statusLabel = {
@@ -416,7 +433,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
           (task.links || []).map((link) => link.label + "|" + link.href).join("\\n") +
           '</textarea></div>' +
           '<div class="link-list">' + (task.links || []).map((link) => '<div><a href="' + link.href + '" target="_blank" rel="noreferrer">' + link.label + '</a></div>').join("") + '</div>' +
-          '<div class="details-section"><label>Checklist</label><div id="checklist"></div></div>' +
+          '<div class="details-section"><label>Checklist</label><div id="checklist"></div><div class="check-create"><input id="new-check-item" placeholder="Add checklist item..." /><button class="btn" id="add-check-btn">Add</button></div></div>' +
           '<div class="detail-actions"><button class="btn" id="edit-task-btn">Edit</button><button class="btn danger" id="delete-task-btn">Delete</button><button class="btn" id="start-task-btn">Start</button><button class="btn" id="complete-task-btn">Complete</button></div>' +
           '<div class="mini-activity"><strong>Mini activity</strong><div>' +
           (taskActivity.length
@@ -431,11 +448,29 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         (task.checklist || []).forEach((item) => {
           const row = document.createElement("label");
           row.className = "check-item";
-          row.innerHTML = '<input type="checkbox" ' + (item.done ? "checked" : "") + ' /> <span>' + item.text + "</span>";
+          row.innerHTML = '<input type="checkbox" ' + (item.done ? "checked" : "") + ' /> <span>' + item.text + '</span><button class="check-delete" data-check-id="' + item.id + '">x</button>';
           row.querySelector("input").addEventListener("change", (event) => {
             vscode.postMessage({ type: "toggleChecklist", taskId: task.id, checklistId: item.id, done: event.target.checked });
           });
+          row.querySelector(".check-delete").addEventListener("click", (event) => {
+            event.preventDefault();
+            vscode.postMessage({ type: "removeChecklistItem", taskId: task.id, checklistId: item.id });
+          });
           checklistHost.appendChild(row);
+        });
+        function addChecklistItem() {
+          const input = host.querySelector("#new-check-item");
+          const text = input.value.trim();
+          if (!text) return;
+          vscode.postMessage({ type: "addChecklistItem", taskId: task.id, text });
+          input.value = "";
+        }
+        host.querySelector("#add-check-btn").addEventListener("click", addChecklistItem);
+        host.querySelector("#new-check-item").addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            addChecklistItem();
+          }
         });
 
         host.querySelector("#edit-task-btn").addEventListener("click", () => {
@@ -466,6 +501,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         document.getElementById("doc-title").textContent = state.selectedDoc === "__main__" ? "Main Document" : state.selectedDoc;
         document.getElementById("doc-editor").value = state.docDraft;
         document.getElementById("doc-preview").innerHTML = markdownToHtml(state.docDraft);
+        renderDocState();
 
         const docsHost = document.getElementById("extra-docs");
         docsHost.innerHTML = "";
@@ -474,11 +510,59 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
           btn.className = "btn";
           btn.textContent = name;
           btn.addEventListener("click", () => {
+            flushDocSave();
             state.selectedDoc = name;
             vscode.postMessage({ type: "readDoc", name });
           });
           docsHost.appendChild(btn);
         });
+      }
+
+      function renderDocState() {
+        const el = document.getElementById("doc-save-state");
+        if (state.docSaving) {
+          el.textContent = "Saving...";
+          el.className = "doc-state saving";
+          return;
+        }
+        if (state.docDirty) {
+          el.textContent = "Unsaved";
+          el.className = "doc-state unsaved";
+          return;
+        }
+        el.textContent = "Saved";
+        el.className = "doc-state";
+      }
+
+      function saveCurrentDoc() {
+        if (!state.docDirty) {
+          return;
+        }
+        state.docSaving = true;
+        renderDocState();
+        if (state.selectedDoc === "__main__") {
+          vscode.postMessage({ type: "saveMainDoc", content: state.docDraft });
+        } else {
+          vscode.postMessage({ type: "saveDoc", name: state.selectedDoc, content: state.docDraft });
+        }
+      }
+
+      function scheduleDocSave() {
+        if (state.docSaveTimer) {
+          clearTimeout(state.docSaveTimer);
+        }
+        state.docSaveTimer = setTimeout(() => {
+          state.docSaveTimer = null;
+          saveCurrentDoc();
+        }, DOC_SAVE_DEBOUNCE_MS);
+      }
+
+      function flushDocSave() {
+        if (state.docSaveTimer) {
+          clearTimeout(state.docSaveTimer);
+          state.docSaveTimer = null;
+        }
+        saveCurrentDoc();
       }
 
       function renderActivity() {
@@ -502,6 +586,9 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
       document.querySelectorAll(".tab").forEach((tabBtn) => {
         tabBtn.addEventListener("click", () => {
           const tab = tabBtn.dataset.tab;
+          if (tab !== "docs") {
+            flushDocSave();
+          }
           document.querySelectorAll(".tab").forEach((btn) => btn.classList.remove("active"));
           document.querySelectorAll(".view").forEach((view) => view.classList.remove("active"));
           tabBtn.classList.add("active");
@@ -539,21 +626,32 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         const input = document.getElementById("new-doc-name");
         const name = input.value.trim();
         if (!name) return;
+        flushDocSave();
+        state.selectedDoc = name;
+        state.docDraft = "# " + name + "\\n\\n";
+        state.docDirty = true;
+        state.docSaving = false;
+        renderDocs();
         vscode.postMessage({ type: "saveDoc", name, content: "# " + name + "\\n\\n" });
         input.value = "";
       });
 
-      document.getElementById("doc-editor").addEventListener("input", (event) => {
-        state.docDraft = event.target.value;
-        document.getElementById("doc-preview").innerHTML = markdownToHtml(state.docDraft);
+      document.querySelector('[data-doc="__main__"]').addEventListener("click", () => {
+        flushDocSave();
+        state.selectedDoc = "__main__";
+        state.docDraft = state.data.docMarkdown || "";
+        state.docDirty = false;
+        state.docSaving = false;
+        renderDocs();
       });
 
-      document.getElementById("save-doc-btn").addEventListener("click", () => {
-        if (state.selectedDoc === "__main__") {
-          vscode.postMessage({ type: "saveMainDoc", content: state.docDraft });
-        } else {
-          vscode.postMessage({ type: "saveDoc", name: state.selectedDoc, content: state.docDraft });
-        }
+      document.getElementById("doc-editor").addEventListener("input", (event) => {
+        state.docDraft = event.target.value;
+        state.docDirty = true;
+        state.docSaving = false;
+        document.getElementById("doc-preview").innerHTML = markdownToHtml(state.docDraft);
+        renderDocState();
+        scheduleDocSave();
       });
 
       window.addEventListener("message", (event) => {
@@ -563,19 +661,25 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
           state.docs = message.docs || [];
           state.selectedDoc = "__main__";
           state.docDraft = state.data.docMarkdown || "";
+          state.docDirty = false;
+          state.docSaving = false;
           if (!state.selectedTaskId && state.data.tasks[0]) {
             state.selectedTaskId = state.data.tasks[0].id;
           }
           renderAll();
         } else if (message.type === "state") {
           state.data = message.data;
-          if (state.selectedDoc === "__main__") {
+          if (state.selectedDoc === "__main__" && (!state.docDirty || state.docSaving)) {
             state.docDraft = state.data.docMarkdown || "";
+            state.docDirty = false;
+            state.docSaving = false;
           }
           renderAll();
         } else if (message.type === "docContent") {
           state.selectedDoc = message.name;
           state.docDraft = message.content || "";
+          state.docDirty = false;
+          state.docSaving = false;
           renderDocs();
         } else if (message.type === "docsList") {
           state.docs = message.docs || [];
