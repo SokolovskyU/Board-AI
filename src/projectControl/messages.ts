@@ -18,6 +18,10 @@ export interface DataMessageResult {
     name: string;
     content: string;
   };
+  notice?: {
+    kind: "info" | "error" | "success";
+    message: string;
+  };
 }
 
 function isTaskStatus(value: unknown): value is TaskStatus {
@@ -98,12 +102,25 @@ export function processDataMessage(inputData: ProjectControlData, message: Messa
       if (typeof typed.patch.description === "string") {
         task.description = sanitizeDescription(typed.patch.description);
       }
+      let droppedLinks = 0;
       if (Array.isArray(typed.patch.links)) {
+        const rawCount = typed.patch.links.length;
         task.links = sanitizeLinks(typed.patch.links);
+        droppedLinks = rawCount - task.links.length;
       }
       task.updatedAt = Date.now();
       activity(data, "task_updated", `Task updated: ${task.title}`, task.id, task.updatedAt);
-      return { handled: true, data };
+      return {
+        handled: true,
+        data,
+        notice:
+          droppedLinks > 0
+            ? {
+                kind: "info",
+                message: `${droppedLinks} invalid or duplicate link(s) were ignored.`
+              }
+            : undefined
+      };
     }
     case "deleteTask": {
       const typed = message as { taskId?: unknown };
@@ -113,7 +130,11 @@ export function processDataMessage(inputData: ProjectControlData, message: Messa
       }
       data.tasks = data.tasks.filter((item) => item.id !== typed.taskId);
       activity(data, "task_deleted", `Task deleted: ${task.title}`, task.id);
-      return { handled: true, data };
+      return {
+        handled: true,
+        data,
+        notice: { kind: "success", message: `Deleted task: ${task.title}` }
+      };
     }
     case "moveTask": {
       const typed = message as { id?: unknown; status?: unknown };
@@ -130,7 +151,11 @@ export function processDataMessage(inputData: ProjectControlData, message: Messa
             ? `Task completed: ${task.title}`
             : `Task moved to ${typed.status}: ${task.title}`;
       activity(data, "task_status", statusMessage, task.id, task.updatedAt);
-      return { handled: true, data };
+      return {
+        handled: true,
+        data,
+        notice: { kind: "success", message: "Checklist item added." }
+      };
     }
     case "toggleChecklist": {
       const typed = message as { taskId?: unknown; checklistId?: unknown; done?: unknown };
@@ -151,18 +176,40 @@ export function processDataMessage(inputData: ProjectControlData, message: Messa
         task.id,
         task.updatedAt
       );
-      return { handled: true, data };
+      return {
+        handled: true,
+        data,
+        notice: { kind: "success", message: "Checklist item removed." }
+      };
     }
     case "addChecklistItem": {
       const typed = message as { taskId?: unknown; text?: unknown };
       const task = data.tasks.find((item) => item.id === typed.taskId);
       const text = sanitizeChecklistText(typed.text);
       if (!task || !text) {
-        return { handled: false, data };
+        return {
+          handled: false,
+          data,
+          notice: { kind: "error", message: "Checklist item is empty or invalid." }
+        };
       }
       const exists = task.checklist.some((item) => item.text.toLowerCase() === text.toLowerCase());
-      if (exists || task.checklist.length >= MAX_CHECKLIST_ITEMS_PER_TASK) {
-        return { handled: false, data };
+      if (exists) {
+        return {
+          handled: false,
+          data,
+          notice: { kind: "error", message: "Checklist item already exists." }
+        };
+      }
+      if (task.checklist.length >= MAX_CHECKLIST_ITEMS_PER_TASK) {
+        return {
+          handled: false,
+          data,
+          notice: {
+            kind: "error",
+            message: `Checklist limit reached (${MAX_CHECKLIST_ITEMS_PER_TASK}).`
+          }
+        };
       }
       task.checklist.push({
         id: makeEntityId("check"),

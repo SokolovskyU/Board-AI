@@ -172,6 +172,11 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         font-size: 12px;
         color: var(--muted);
       }
+      .details-error {
+        margin-top: 6px;
+        font-size: 12px;
+        color: #ff9b9b;
+      }
       .detail-grid {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 110px;
@@ -226,6 +231,11 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         padding: 14px;
         overflow: auto;
       }
+      .activity-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 10px;
+      }
       .activity-card {
         background: rgba(18, 25, 38, 0.9);
         border: 1px solid var(--line);
@@ -250,6 +260,24 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
       .doc-state.saving { color: var(--accent); }
       .muted { color: var(--muted); }
       .row { display: flex; gap: 8px; }
+      .toasts {
+        position: fixed;
+        right: 14px;
+        bottom: 14px;
+        display: grid;
+        gap: 8px;
+        max-width: 360px;
+        z-index: 10;
+      }
+      .toast {
+        background: #111a2c;
+        border: 1px solid #2a3d61;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 12px;
+      }
+      .toast.error { border-color: #7a3030; color: #ffd0d0; }
+      .toast.success { border-color: #2d6b3f; color: #c9f3d6; }
     </style>
   </head>
   <body>
@@ -304,9 +332,18 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
       </section>
 
       <section id="activity-view" class="view activity">
+        <div class="activity-toolbar">
+          <select id="activity-filter">
+            <option value="all">All activity</option>
+            <option value="tasks">Tasks</option>
+            <option value="docs">Docs</option>
+            <option value="agent">Agent</option>
+          </select>
+        </div>
         <div id="activity-list"></div>
       </section>
     </div>
+    <div class="toasts" id="toasts"></div>
 
     <script nonce="${scriptNonce}">
       const vscode = acquireVsCodeApi();
@@ -324,7 +361,9 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         detailDraft: null,
         detailDirty: false,
         detailSaving: false,
-        detailSaveTimer: null
+        detailSaveTimer: null,
+        activityFilter: "all",
+        toasts: []
       };
       const DOC_SAVE_DEBOUNCE_MS = 600;
       const DETAIL_SAVE_DEBOUNCE_MS = 500;
@@ -356,6 +395,43 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
 
       function formatTs(ts) {
         return new Date(ts).toLocaleString();
+      }
+
+      function showToast(kind, message) {
+        const id = "toast_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+        state.toasts.push({ id, kind, message });
+        renderToasts();
+        setTimeout(() => {
+          state.toasts = state.toasts.filter((toast) => toast.id !== id);
+          renderToasts();
+        }, 2600);
+      }
+
+      function renderToasts() {
+        const host = document.getElementById("toasts");
+        host.innerHTML = state.toasts
+          .map((toast) => '<div class="toast ' + (toast.kind || "info") + '">' + toast.message + "</div>")
+          .join("");
+      }
+
+      function isValidLinkHref(href) {
+        return /^https?:\\/\\//i.test(href) || /^mailto:/i.test(href);
+      }
+
+      function validateLinksInput(text) {
+        const lines = text
+          .split("\\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+        let invalidCount = 0;
+        lines.forEach((line) => {
+          const parts = line.split("|");
+          const href = (parts[1] || "").trim();
+          if (!href || !isValidLinkHref(href)) {
+            invalidCount += 1;
+          }
+        });
+        return invalidCount;
       }
 
       function filteredTasks() {
@@ -467,7 +543,8 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
           title: draft ? draft.title : task.title,
           priority: draft ? draft.priority : task.priority,
           description: draft ? draft.description : (task.description || ""),
-          linksText: draft ? draft.linksText : linksToText(task.links || [])
+          linksText: draft ? draft.linksText : linksToText(task.links || []),
+          linksInvalid: draft ? draft.linksInvalid : 0
         };
       }
 
@@ -533,7 +610,9 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
           '<div class="preview">' + markdownToHtml(detail.description) + '</div>' +
           '<div class="details-section"><label>Links (one per line: label|https://...)</label><textarea id="detail-links">' +
           detail.linksText +
-          '</textarea></div>' +
+          '</textarea>' +
+          (detail.linksInvalid > 0 ? '<div class="details-error">' + detail.linksInvalid + ' link(s) will be ignored (invalid URL).</div>' : "") +
+          '</div>' +
           '<div class="link-list">' + (task.links || []).map((link) => '<div><a href="' + link.href + '" target="_blank" rel="noreferrer">' + link.label + '</a></div>').join("") + '</div>' +
           '<div class="details-section"><label>Checklist</label><div id="checklist"></div><div class="check-create"><input id="new-check-item" placeholder="Add checklist item..." /><button class="btn" id="add-check-btn">Add</button></div></div>' +
           '<div class="detail-actions"><button class="btn danger" id="delete-task-btn">Delete</button><button class="btn" id="start-task-btn">Start</button><button class="btn" id="complete-task-btn">Complete</button></div>' +
@@ -576,12 +655,15 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         });
 
         function onDetailChanged() {
+          const linksText = host.querySelector("#detail-links").value;
+          const linksInvalid = validateLinksInput(linksText);
           state.detailDraft = {
             taskId: task.id,
             title: host.querySelector("#detail-title").value,
             priority: host.querySelector("#detail-priority").value,
             description: host.querySelector("#detail-description").value,
-            linksText: host.querySelector("#detail-links").value
+            linksText,
+            linksInvalid
           };
           state.detailDirty = true;
           state.detailSaving = false;
@@ -674,11 +756,26 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
 
       function renderActivity() {
         const host = document.getElementById("activity-list");
-        if (!state.data.activity.length) {
+        const filtered = state.data.activity.filter((item) => {
+          if (state.activityFilter === "all") {
+            return true;
+          }
+          if (state.activityFilter === "tasks") {
+            return item.type.startsWith("task_") || item.type.startsWith("checklist_");
+          }
+          if (state.activityFilter === "docs") {
+            return item.type === "doc_saved";
+          }
+          if (state.activityFilter === "agent") {
+            return item.type === "ingest" || item.type === "outbox_sync";
+          }
+          return true;
+        });
+        if (!filtered.length) {
           host.innerHTML = '<div class="empty">No activity yet.</div>';
           return;
         }
-        host.innerHTML = state.data.activity
+        host.innerHTML = filtered
           .map((item) => '<div class="activity-card"><div><strong>' + item.type + '</strong></div><div>' + item.message + '</div><div class="muted">' + formatTs(item.ts) + "</div></div>")
           .join("");
       }
@@ -714,6 +811,11 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
       document.getElementById("priority-filter").addEventListener("change", (event) => {
         state.priorityFilter = event.target.value;
         renderBoard();
+      });
+
+      document.getElementById("activity-filter").addEventListener("change", (event) => {
+        state.activityFilter = event.target.value;
+        renderActivity();
       });
 
       function createTaskFromInput() {
@@ -808,6 +910,8 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         } else if (message.type === "docsList") {
           state.docs = message.docs || [];
           renderDocs();
+        } else if (message.type === "notice" && message.notice) {
+          showToast(message.notice.kind || "info", message.notice.message || "Action processed.");
         }
       });
 

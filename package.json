@@ -12,7 +12,8 @@
   "activationEvents": [
     "onStartupFinished",
     "onCommand:projectControl.open",
-    "onCommand:projectControl.ingestPrompt"
+    "onCommand:projectControl.ingestPrompt",
+    "onCommand:projectControl.syncFromOutbox"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -24,6 +25,10 @@
       {
         "command": "projectControl.ingestPrompt",
         "title": "Project Control: Ingest Prompt"
+      },
+      {
+        "command": "projectControl.syncFromOutbox",
+        "title": "Project Control: Sync From Outbox"
       }
     ],
     "configuration": {

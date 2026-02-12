@@ -158,6 +158,11 @@ export class ProjectControlStorage {
     await this.writeText(this.getAgentOutboxUri(), content);
   }
 
+  async readOutbox(): Promise<string> {
+    const bytes = await vscode.workspace.fs.readFile(this.getAgentOutboxUri());
+    return decoder.decode(bytes);
+  }
+
   async appendActivity(
     data: ProjectControlData,
     type: string,

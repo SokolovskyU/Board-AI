@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { ingestPromptToTasks } from "./projectControl/ingest";
 import { processDataMessage } from "./projectControl/messages";
+import { syncTasksFromOutbox } from "./projectControl/outboxSync";
 import { normalizeData } from "./projectControl/dataModel";
 import { ProjectControlStorage } from "./projectControl/storage";
 import { sanitizeDocName } from "./projectControl/utils";
@@ -34,7 +35,22 @@ export function activate(context: vscode.ExtensionContext): void {
     postStateUpdate(storage, ingest.data);
   });
 
-  context.subscriptions.push(openDisposable, ingestDisposable);
+  const syncOutboxDisposable = vscode.commands.registerCommand("projectControl.syncFromOutbox", async () => {
+    const storage = getStorageOrNotify(true);
+    if (!storage) {
+      return;
+    }
+    const data = await storage.loadData();
+    const outbox = await storage.readOutbox();
+    const synced = syncTasksFromOutbox(outbox, data);
+    await storage.saveData(synced.data);
+    vscode.window.showInformationMessage(
+      `Project Control: synced ${synced.createdTasks.length} task(s) from agent outbox.`
+    );
+    postStateUpdate(storage, synced.data);
+  });
+
+  context.subscriptions.push(openDisposable, ingestDisposable, syncOutboxDisposable);
 
   const autoOpen = vscode.workspace.getConfiguration("projectControl").get<boolean>("autoOpen", true);
   if (autoOpen && !sessionAutoOpened) {
@@ -130,6 +146,9 @@ async function handleWebviewMessage(storage: ProjectControlStorage, message: any
 
   const processed = processDataMessage(data, message);
   if (!processed.handled) {
+    if (processed.notice) {
+      currentPanel?.webview.postMessage({ type: "notice", notice: processed.notice });
+    }
     return;
   }
 
@@ -146,6 +165,9 @@ async function handleWebviewMessage(storage: ProjectControlStorage, message: any
 
   await storage.saveData(processed.data);
   postStateUpdate(storage, processed.data);
+  if (processed.notice) {
+    currentPanel?.webview.postMessage({ type: "notice", notice: processed.notice });
+  }
 }
 
 function postInit(storage: ProjectControlStorage, data: ProjectControlData, docs: string[]): void {

@@ -10,6 +10,7 @@ Key idea:
 
 - Command: `Project Control: Open`
 - Command: `Project Control: Ingest Prompt`
+- Command: `Project Control: Sync From Outbox`
 - Auto-open on workspace start (once per session), controlled by `projectControl.autoOpen`.
 - Webview tabs: `Board`, `Docs`, `Activity`.
 - Board columns: `Backlog`, `To Do`, `In Progress`, `Done`.
@@ -28,6 +29,8 @@ Key idea:
   - additional docs from `.project-control/docs/*.md`
   - autosave with debounce and Saved/Unsaved indicator
 - Global activity feed with timestamps.
+- Activity filters: `All`, `Tasks`, `Docs`, `Agent`.
+- Toast feedback for important actions and validation results.
 
 ## Storage Layout
 
@@ -68,6 +71,7 @@ Data schema (`.project-control/data.json`):
 2. Run `Project Control: Ingest Prompt`.
 3. Extension parses text locally (no network calls), creates tasks in `data.json`, writes summary into `agent_outbox.md`, and logs activity.
 4. Agent/Codex continues updating task status/details during execution.
+5. Optionally run `Project Control: Sync From Outbox` to import structured tasks from outbox back into board state.
 
 ## Development
 
@@ -75,6 +79,7 @@ Data schema (`.project-control/data.json`):
 npm install
 npm run compile
 npm test
+npm run package
 ```
 
 Then run extension in VS Code debugger (`F5`).

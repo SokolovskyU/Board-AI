@@ -3,6 +3,7 @@ import { MAX_CHECKLIST_ITEMS_PER_TASK, MAX_TITLE_LENGTH } from "../projectContro
 import { emptyData, normalizeData } from "../projectControl/dataModel";
 import { ingestPromptToTasks } from "../projectControl/ingest";
 import { processDataMessage } from "../projectControl/messages";
+import { syncTasksFromOutbox } from "../projectControl/outboxSync";
 
 suite("Project Control Core", () => {
   test("normalizeData fills defaults and sanitizes invalid fields", () => {
@@ -103,5 +104,54 @@ suite("Project Control Core", () => {
       data = step.data;
     }
     assert.strictEqual(data.tasks[0].checklist.length, MAX_CHECKLIST_ITEMS_PER_TASK);
+  });
+
+  test("message notices are returned for dropped links and duplicate checklist", () => {
+    let data = emptyData();
+    let step = processDataMessage(data, { type: "createTask", title: "Task A" });
+    data = step.data;
+    const taskId = data.tasks[0].id;
+
+    step = processDataMessage(data, {
+      type: "updateTask",
+      taskId,
+      patch: {
+        links: [{ label: "bad", href: "not-url" }, { label: "good", href: "https://ok.test" }]
+      }
+    });
+    assert.strictEqual(step.notice?.kind, "info");
+    assert.ok((step.notice?.message || "").includes("ignored"));
+    data = step.data;
+
+    step = processDataMessage(data, { type: "addChecklistItem", taskId, text: "same" });
+    data = step.data;
+    step = processDataMessage(data, { type: "addChecklistItem", taskId, text: "same" });
+    assert.strictEqual(step.handled, false);
+    assert.strictEqual(step.notice?.kind, "error");
+  });
+
+  test("syncTasksFromOutbox imports numbered tasks and skips duplicates", () => {
+    const data = emptyData();
+    data.tasks.push({
+      id: "t1",
+      title: "Existing task",
+      priority: "medium",
+      status: "todo",
+      description: "",
+      links: [],
+      checklist: [],
+      createdAt: 1,
+      updatedAt: 1
+    });
+
+    const outbox = `
+Created tasks:
+1. [high] Existing task
+2. [medium] Add activity filters
+3. [low] Add sync command
+`;
+    const result = syncTasksFromOutbox(outbox, data);
+    assert.strictEqual(result.createdTasks.length, 2);
+    assert.ok(result.data.activity.some((item) => item.type === "outbox_sync"));
   });
 });
