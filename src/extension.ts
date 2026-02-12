@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
+import { ensureAgentsRules } from "./projectControl/agents";
 import { ingestPromptToTasks } from "./projectControl/ingest";
 import { processDataMessage } from "./projectControl/messages";
+import { runMultiAgentCycle } from "./projectControl/orchestrator";
 import { syncTasksFromOutbox } from "./projectControl/outboxSync";
 import { normalizeData } from "./projectControl/dataModel";
 import { ProjectControlStorage } from "./projectControl/storage";
@@ -11,9 +13,15 @@ import { getProjectControlHtml } from "./projectControl/webview";
 let currentPanel: vscode.WebviewPanel | undefined;
 let sessionAutoOpened = false;
 let extensionCtx: vscode.ExtensionContext | undefined;
+let externalRefreshTimer: NodeJS.Timeout | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
   extensionCtx = context;
+  const workspaceRoot = getWorkspaceRoot();
+  if (workspaceRoot) {
+    void ensureAgentsRules(workspaceRoot);
+  }
+
   const openDisposable = vscode.commands.registerCommand("projectControl.open", async () => {
     await openProjectControlPanel(context, true);
   });
@@ -50,12 +58,75 @@ export function activate(context: vscode.ExtensionContext): void {
     postStateUpdate(storage, synced.data);
   });
 
-  context.subscriptions.push(openDisposable, ingestDisposable, syncOutboxDisposable);
+  const runCycleDisposable = vscode.commands.registerCommand("projectControl.runMultiAgentCycle", async () => {
+    const storage = getStorageOrNotify(true);
+    if (!storage) {
+      return;
+    }
+    const data = await storage.loadData();
+    const result = runMultiAgentCycle(data);
+    await storage.saveData(result.data);
+    vscode.window.showInformationMessage(`Project Control: ${result.message}`);
+    postStateUpdate(storage, result.data);
+  });
+
+  context.subscriptions.push(openDisposable, ingestDisposable, syncOutboxDisposable, runCycleDisposable);
+  registerRealtimeWatchers(context);
 
   const autoOpen = vscode.workspace.getConfiguration("projectControl").get<boolean>("autoOpen", true);
   if (autoOpen && !sessionAutoOpened) {
     sessionAutoOpened = true;
     void openProjectControlPanel(context, false);
+  }
+}
+
+function registerRealtimeWatchers(context: vscode.ExtensionContext): void {
+  const dataWatcher = vscode.workspace.createFileSystemWatcher("**/.project-control/data.json");
+  const docsWatcher = vscode.workspace.createFileSystemWatcher("**/.project-control/docs/*.md");
+
+  const onExternalChange = (): void => {
+    scheduleExternalRefresh();
+  };
+
+  dataWatcher.onDidChange(onExternalChange);
+  dataWatcher.onDidCreate(onExternalChange);
+  dataWatcher.onDidDelete(onExternalChange);
+
+  docsWatcher.onDidChange(onExternalChange);
+  docsWatcher.onDidCreate(onExternalChange);
+  docsWatcher.onDidDelete(onExternalChange);
+
+  context.subscriptions.push(dataWatcher, docsWatcher);
+}
+
+function scheduleExternalRefresh(): void {
+  if (!currentPanel) {
+    return;
+  }
+  if (externalRefreshTimer) {
+    clearTimeout(externalRefreshTimer);
+  }
+  externalRefreshTimer = setTimeout(() => {
+    void refreshPanelFromWorkspace();
+  }, 120);
+}
+
+async function refreshPanelFromWorkspace(): Promise<void> {
+  if (!currentPanel) {
+    return;
+  }
+  const storage = getStorageOrNotify(false);
+  if (!storage) {
+    return;
+  }
+
+  try {
+    const data = await storage.loadData();
+    const docs = await storage.listDocs();
+    currentPanel.webview.postMessage({ type: "state", data: normalizeData(data) });
+    currentPanel.webview.postMessage({ type: "docsList", docs });
+  } catch {
+    // Ignore transient IO errors during rapid external writes.
   }
 }
 
@@ -138,6 +209,16 @@ async function handleWebviewMessage(storage: ProjectControlStorage, message: any
       const name = sanitizeDocName(typeof message.name === "string" ? message.name : "");
       const content = await storage.readDoc(name);
       currentPanel?.webview.postMessage({ type: "docContent", name, content });
+      return;
+    }
+    case "runCycle": {
+      const result = runMultiAgentCycle(data);
+      await storage.saveData(result.data);
+      postStateUpdate(storage, result.data);
+      currentPanel?.webview.postMessage({
+        type: "notice",
+        notice: { kind: "info", message: result.message }
+      });
       return;
     }
     default:

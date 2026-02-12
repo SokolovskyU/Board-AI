@@ -1,5 +1,6 @@
 export type TaskPriority = "low" | "medium" | "high";
 export type TaskStatus = "backlog" | "todo" | "inprogress" | "done";
+export type TaskOwner = "planner" | "builder" | "qa" | "scribe";
 
 export interface TaskLink {
   label: string;
@@ -17,6 +18,7 @@ export interface Task {
   title: string;
   priority: TaskPriority;
   status: TaskStatus;
+  owner: TaskOwner;
   description: string;
   links: TaskLink[];
   checklist: ChecklistItem[];

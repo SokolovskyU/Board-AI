@@ -1,8 +1,11 @@
 import * as assert from "assert";
+import { upsertAgentsRules } from "../projectControl/agentsRules";
 import { MAX_CHECKLIST_ITEMS_PER_TASK, MAX_TITLE_LENGTH } from "../projectControl/constraints";
 import { emptyData, normalizeData } from "../projectControl/dataModel";
+import { decodeTextBytes, repairCommonMojibake } from "../projectControl/encoding";
 import { ingestPromptToTasks } from "../projectControl/ingest";
 import { processDataMessage } from "../projectControl/messages";
+import { runMultiAgentCycle } from "../projectControl/orchestrator";
 import { syncTasksFromOutbox } from "../projectControl/outboxSync";
 
 suite("Project Control Core", () => {
@@ -55,6 +58,7 @@ suite("Project Control Core", () => {
     data = step.data;
     assert.strictEqual(data.tasks.length, 1);
     const taskId = data.tasks[0].id;
+    assert.strictEqual(data.tasks[0].owner, "builder");
 
     step = processDataMessage(data, { type: "moveTask", id: taskId, status: "inprogress" });
     assert.strictEqual(step.handled, true);
@@ -137,6 +141,7 @@ suite("Project Control Core", () => {
       title: "Existing task",
       priority: "medium",
       status: "todo",
+      owner: "builder",
       description: "",
       links: [],
       checklist: [],
@@ -153,5 +158,112 @@ Created tasks:
     const result = syncTasksFromOutbox(outbox, data);
     assert.strictEqual(result.createdTasks.length, 2);
     assert.ok(result.data.activity.some((item) => item.type === "outbox_sync"));
+  });
+
+  test("runMultiAgentCycle moves task through builder qa scribe pipeline", () => {
+    const data = emptyData();
+    data.tasks.push({
+      id: "task_1",
+      title: "Implement feature",
+      priority: "medium",
+      status: "todo",
+      owner: "builder",
+      description: "",
+      links: [],
+      checklist: [],
+      createdAt: 1,
+      updatedAt: 1
+    });
+
+    let step = runMultiAgentCycle(data);
+    let task = step.data.tasks[0];
+    assert.strictEqual(task.status, "inprogress");
+    assert.strictEqual(task.owner, "builder");
+
+    step = runMultiAgentCycle(step.data);
+    task = step.data.tasks[0];
+    assert.strictEqual(task.status, "todo");
+    assert.strictEqual(task.owner, "qa");
+
+    step = runMultiAgentCycle(step.data);
+    task = step.data.tasks[0];
+    assert.strictEqual(task.status, "inprogress");
+    assert.strictEqual(task.owner, "qa");
+
+    step = runMultiAgentCycle(step.data);
+    task = step.data.tasks[0];
+    assert.strictEqual(task.status, "todo");
+    assert.strictEqual(task.owner, "scribe");
+
+    step = runMultiAgentCycle(step.data);
+    task = step.data.tasks[0];
+    assert.strictEqual(task.status, "inprogress");
+    assert.strictEqual(task.owner, "scribe");
+
+    step = runMultiAgentCycle(step.data);
+    task = step.data.tasks[0];
+    assert.strictEqual(task.status, "done");
+  });
+
+  test("repairCommonMojibake restores broken UTF-8 Russian text", () => {
+    const broken = "РџСЂРёРІРµС‚, РјРёСЂ";
+    const fixed = repairCommonMojibake(broken);
+    assert.strictEqual(fixed, "Привет, мир");
+  });
+
+  test("decodeTextBytes supports cp1251 fallback for Russian text", () => {
+    // "Привет" in windows-1251 bytes
+    const cp1251Bytes = Uint8Array.from([0xcf, 0xf0, 0xe8, 0xe2, 0xe5, 0xf2]);
+    const decoded = decodeTextBytes(cp1251Bytes);
+    assert.strictEqual(decoded, "Привет");
+  });
+
+  test("upsertAgentsRules creates rules when AGENTS.md is missing", () => {
+    const result = upsertAgentsRules("");
+    assert.ok(result.includes("# Codex Project Rules"));
+    assert.ok(result.includes("Всегда работай через Project Control."));
+  });
+
+  test("upsertAgentsRules does not duplicate equivalent existing rules", () => {
+    const existing = `# Codex Project Rules
+
+Всегда работай через Project Control.
+
+Правила:
+- Режим работы строго по фазам:
+- Перед началом работы создай/обнови задачи в \`.project-control/data.json\` через команды/контракт расширения.
+- Если пользователь дал новый большой промпт, используй \`Project Control: Ingest Prompt\`.
+- Если есть структурированный \`agent_outbox.md\`, используй \`Project Control: Sync From Outbox\`.
+`;
+    const result = upsertAgentsRules(existing);
+    assert.strictEqual(result, existing);
+  });
+
+  test("upsertAgentsRules upgrades legacy plain rules to managed block", () => {
+    const existing = `# Codex Project Rules
+
+Всегда работай через Project Control.
+
+Правила:
+- Перед началом работы создай/обнови задачи в \`.project-control/data.json\` через команды/контракт расширения.
+- Если пользователь дал новый большой промпт, используй \`Project Control: Ingest Prompt\`.
+- Если есть структурированный \`agent_outbox.md\`, используй \`Project Control: Sync From Outbox\`.
+`;
+    const result = upsertAgentsRules(existing);
+    assert.ok(result.includes("<!-- project-control:start -->"));
+    assert.ok(result.includes("Режим работы строго по фазам:"));
+  });
+
+  test("upsertAgentsRules replaces managed block by markers", () => {
+    const existing = `# Team Rules
+
+<!-- project-control:start -->
+old block
+<!-- project-control:end -->
+`;
+    const result = upsertAgentsRules(existing);
+    assert.ok(result.includes("# Team Rules"));
+    assert.ok(result.includes("# Codex Project Rules"));
+    assert.ok(!result.includes("old block"));
   });
 });

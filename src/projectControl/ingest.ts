@@ -1,5 +1,6 @@
 import { ProjectControlData, Task, TaskPriority } from "./types";
 import { normalizeData } from "./dataModel";
+import { repairCommonMojibake } from "./encoding";
 import { makeEntityId } from "./utils";
 
 function inferPriority(line: string): TaskPriority {
@@ -60,8 +61,9 @@ export interface IngestResult {
 }
 
 export function ingestPromptToTasks(prompt: string, currentData: ProjectControlData): IngestResult {
+  const safePrompt = repairCommonMojibake(prompt);
   const base = normalizeData(currentData);
-  const lines = extractCandidateLines(prompt);
+  const lines = extractCandidateLines(safePrompt);
   const timestamp = Date.now();
 
   const createdTasks: Task[] = lines.map((line, index) => {
@@ -71,9 +73,10 @@ export function ingestPromptToTasks(prompt: string, currentData: ProjectControlD
       title,
       priority: inferPriority(line),
       status: "todo",
+      owner: "builder",
       description: `Execution details:\n\n${line}`,
       links: [],
-      checklist: toChecklist(prompt),
+      checklist: toChecklist(safePrompt),
       createdAt: timestamp + index,
       updatedAt: timestamp + index
     };

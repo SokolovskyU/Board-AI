@@ -49,6 +49,10 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         --low: #9ece6a;
         --medium: #e0af68;
         --high: #f7768e;
+        --planner: #bb9af7;
+        --builder: #7aa2f7;
+        --qa: #73daca;
+        --scribe: #9ece6a;
       }
       * { box-sizing: border-box; }
       body {
@@ -88,6 +92,9 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         height: 100%;
         display: grid;
         grid-template-columns: minmax(0, 1fr) 340px;
+      }
+      .board-layout.details-collapsed {
+        grid-template-columns: minmax(0, 1fr);
       }
       .board-main { padding: 14px; overflow: auto; }
       .toolbar {
@@ -155,14 +162,42 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
       .pill.low { background: rgba(108, 192, 112, 0.2); color: var(--low); }
       .pill.medium { background: rgba(240, 177, 75, 0.2); color: var(--medium); }
       .pill.high { background: rgba(255, 125, 125, 0.2); color: var(--high); }
+      .owner-pill {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        font-size: 10px;
+        text-transform: uppercase;
+      }
+      .owner-pill.planner { background: rgba(187, 154, 247, 0.2); color: var(--planner); }
+      .owner-pill.builder { background: rgba(122, 162, 247, 0.2); color: var(--builder); }
+      .owner-pill.qa { background: rgba(115, 218, 202, 0.2); color: var(--qa); }
+      .owner-pill.scribe { background: rgba(158, 206, 106, 0.2); color: var(--scribe); }
       .details {
         border-left: 1px solid var(--line);
         background: rgba(11, 16, 27, 0.85);
         padding: 14px;
         overflow: auto;
       }
+      .board-layout.details-collapsed .details {
+        display: none;
+      }
       .details h2 { margin: 0 0 8px; }
       .details-head { display: flex; align-items: center; gap: 8px; }
+      .close-details-btn {
+        margin-left: 8px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--muted);
+        border-radius: 6px;
+        padding: 2px 8px;
+        cursor: pointer;
+      }
+      .close-details-btn:hover {
+        color: var(--text);
+        border-color: #3b4261;
+      }
       .detail-state { margin-left: auto; font-size: 12px; color: var(--muted); }
       .detail-state.unsaved { color: var(--medium); }
       .detail-state.saving { color: var(--accent); }
@@ -181,9 +216,17 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
       }
       .detail-grid {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 110px;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         gap: 8px;
         align-items: end;
+      }
+      .detail-grid .title-field {
+        grid-column: 1 / -1;
+      }
+      .detail-grid input,
+      .detail-grid select {
+        width: 100%;
+        min-width: 0;
       }
       .detail-actions {
         display: grid;
@@ -257,11 +300,17 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         cursor: pointer;
       }
       .check-create { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 8px; }
+      .check-create input {
+        min-width: 0;
+      }
       .doc-state { font-size: 12px; color: var(--muted); margin-left: auto; }
       .doc-state.unsaved { color: var(--medium); }
       .doc-state.saving { color: var(--accent); }
       .muted { color: var(--muted); }
       .row { display: flex; gap: 8px; }
+      .meta {
+        flex-wrap: wrap;
+      }
       .toasts {
         position: fixed;
         right: 14px;
@@ -285,9 +334,9 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
   <body>
     <div class="app">
       <div class="tabs">
-        <button class="tab active" data-tab="board">Board</button>
-        <button class="tab" data-tab="docs">Docs</button>
-        <button class="tab" data-tab="activity">Activity</button>
+        <button class="tab active" data-tab="board" title="Доска задач: план, работа и завершение">Board</button>
+        <button class="tab" data-tab="docs" title="Документация проекта">Docs</button>
+        <button class="tab" data-tab="activity" title="Лента событий по проекту">Activity</button>
       </div>
 
       <section id="board-view" class="view active">
@@ -301,8 +350,16 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
                 <option value="medium">medium</option>
                 <option value="high">high</option>
               </select>
+              <select id="owner-filter">
+                <option value="all">All owners</option>
+                <option value="planner">planner</option>
+                <option value="builder">builder</option>
+                <option value="qa">qa</option>
+                <option value="scribe">scribe</option>
+              </select>
               <input id="new-task-title" placeholder="New task title..." />
-              <button class="btn" id="new-task-btn">New Task</button>
+              <button class="btn" id="new-task-btn" title="Создать новую задачу в очереди To Do">New Task</button>
+              <button class="btn" id="run-cycle-btn" title="Запустить один шаг мультиагентного цикла">Run Cycle</button>
             </div>
             <div class="columns" id="board-columns"></div>
           </div>
@@ -313,11 +370,11 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
       <section id="docs-view" class="view">
         <div class="docs-layout">
           <aside class="doc-list">
-            <button class="btn" data-doc="__main__">Main Document</button>
+            <button class="btn" data-doc="__main__" title="Открыть основной документ">Main Document</button>
             <div id="extra-docs"></div>
             <div class="row">
               <input id="new-doc-name" placeholder="new-doc.md" />
-              <button class="btn" id="create-doc-btn">+</button>
+              <button class="btn" id="create-doc-btn" title="Создать новый markdown-документ">+</button>
             </div>
           </aside>
           <div class="doc-editor">
@@ -354,6 +411,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         selectedTaskId: null,
         search: "",
         priorityFilter: "all",
+        ownerFilter: "all",
         docs: [],
         selectedDoc: "__main__",
         docDraft: "",
@@ -365,7 +423,8 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         detailSaving: false,
         detailSaveTimer: null,
         activityFilter: "all",
-        toasts: []
+        toasts: [],
+        detailsOpen: true
       };
       const DOC_SAVE_DEBOUNCE_MS = 600;
       const DETAIL_SAVE_DEBOUNCE_MS = 500;
@@ -441,8 +500,17 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
           const q = state.search.trim().toLowerCase();
           const bySearch = !q || task.title.toLowerCase().includes(q) || (task.description || "").toLowerCase().includes(q);
           const byPriority = state.priorityFilter === "all" || task.priority === state.priorityFilter;
-          return bySearch && byPriority;
+          const byOwner = state.ownerFilter === "all" || task.owner === state.ownerFilter;
+          return bySearch && byPriority && byOwner;
         });
+      }
+
+      function applyDetailsLayout() {
+        const layout = document.querySelector(".board-layout");
+        if (!layout) {
+          return;
+        }
+        layout.classList.toggle("details-collapsed", !state.detailsOpen);
       }
 
       function renderBoard() {
@@ -462,16 +530,28 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
               node.className = "card";
               node.draggable = true;
               node.dataset.id = task.id;
-              node.innerHTML = '<div class="card-title">' + task.title + '</div><span class="pill ' + task.priority + '">' + task.priority + '</span>';
+              node.innerHTML =
+                '<div class="card-title">' +
+                task.title +
+                '</div><span class="pill ' +
+                task.priority +
+                '">' +
+                task.priority +
+                '</span><span class="owner-pill ' +
+                (task.owner || "builder") +
+                '">' +
+                (task.owner || "builder") +
+                "</span>";
               node.addEventListener("click", () => {
                 if (state.selectedTaskId && state.selectedTaskId !== task.id) {
                   flushDetailSave();
                 }
+                state.detailsOpen = true;
                 state.selectedTaskId = task.id;
                 state.detailDraft = null;
                 state.detailDirty = false;
                 state.detailSaving = false;
-                renderDetails();
+                renderAll();
               });
               node.addEventListener("dragstart", (event) => {
                 event.dataTransfer.setData("text/plain", task.id);
@@ -544,6 +624,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         return {
           title: draft ? draft.title : task.title,
           priority: draft ? draft.priority : task.priority,
+          owner: draft ? draft.owner : (task.owner || "builder"),
           description: draft ? draft.description : (task.description || ""),
           linksText: draft ? draft.linksText : linksToText(task.links || []),
           linksInvalid: draft ? draft.linksInvalid : 0
@@ -563,6 +644,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
           patch: {
             title: state.detailDraft.title,
             priority: state.detailDraft.priority,
+            owner: state.detailDraft.owner,
             description: state.detailDraft.description,
             links: parseLinks(state.detailDraft.linksText)
           }
@@ -602,11 +684,12 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         const detailState = getDetailStateLabel();
         const taskActivity = state.data.activity.filter((item) => item.taskId === task.id).slice(0, 6);
         host.innerHTML =
-          '<div class="details-head"><h2>' + task.title + '</h2><span id="detail-save-state" class="' + detailState.cls + '">' + detailState.text + "</span></div>" +
-          '<div class="meta"><span class="pill ' + task.priority + '">' + task.priority + '</span><span class="muted">' + statusLabel[task.status] + '</span></div>' +
+          '<div class="details-head"><h2>' + task.title + '</h2><span id="detail-save-state" class="' + detailState.cls + '">' + detailState.text + '</span><button class="close-details-btn" id="close-details-btn" title="Скрыть панель деталей задачи">×</button></div>' +
+          '<div class="meta"><span class="pill ' + task.priority + '">' + task.priority + '</span><span class="owner-pill ' + (task.owner || "builder") + '">' + (task.owner || "builder") + '</span><span class="muted">' + statusLabel[task.status] + '</span></div>' +
           '<div class="details-section detail-grid">' +
-          '<div><label>Title</label><input id="detail-title" maxlength="120" value="' + detail.title.replace(/"/g, "&quot;") + '" /></div>' +
+          '<div class="title-field"><label>Title</label><input id="detail-title" maxlength="120" value="' + detail.title.replace(/"/g, "&quot;") + '" /></div>' +
           '<div><label>Priority</label><select id="detail-priority"><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></div>' +
+          '<div><label>Owner</label><select id="detail-owner"><option value="planner">planner</option><option value="builder">builder</option><option value="qa">qa</option><option value="scribe">scribe</option></select></div>' +
           '</div>' +
           '<div class="details-section"><label>Description (Markdown)</label><textarea id="detail-description">' + detail.description + '</textarea></div>' +
           '<div class="preview">' + markdownToHtml(detail.description) + '</div>' +
@@ -616,8 +699,8 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
           (detail.linksInvalid > 0 ? '<div class="details-error">' + detail.linksInvalid + ' link(s) will be ignored (invalid URL).</div>' : "") +
           '</div>' +
           '<div class="link-list">' + (task.links || []).map((link) => '<div><a href="' + link.href + '" target="_blank" rel="noreferrer">' + link.label + '</a></div>').join("") + '</div>' +
-          '<div class="details-section"><label>Checklist</label><div id="checklist"></div><div class="check-create"><input id="new-check-item" placeholder="Add checklist item..." /><button class="btn" id="add-check-btn">Add</button></div></div>' +
-          '<div class="detail-actions"><button class="btn danger" id="delete-task-btn">Delete</button><button class="btn" id="start-task-btn">Start</button><button class="btn" id="complete-task-btn">Complete</button></div>' +
+          '<div class="details-section"><label>Checklist</label><div id="checklist"></div><div class="check-create"><input id="new-check-item" placeholder="Add checklist item..." /><button class="btn" id="add-check-btn" title="Добавить пункт в чеклист">Add</button></div></div>' +
+          '<div class="detail-actions"><button class="btn danger" id="delete-task-btn" title="Удалить задачу с доски">Delete</button><button class="btn" id="start-task-btn" title="Перевести задачу в In Progress">Start</button><button class="btn" id="complete-task-btn" title="Отметить задачу как выполненную">Complete</button></div>' +
           '<div class="mini-activity"><strong>Mini activity</strong><div>' +
           (taskActivity.length
             ? taskActivity.map((item) => '<div class="act-item">' + formatTs(item.ts) + " - " + item.message + "</div>").join("")
@@ -626,12 +709,14 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
 
         const priority = host.querySelector("#detail-priority");
         priority.value = detail.priority;
+        const owner = host.querySelector("#detail-owner");
+        owner.value = detail.owner;
 
         const checklistHost = host.querySelector("#checklist");
         (task.checklist || []).forEach((item) => {
           const row = document.createElement("label");
           row.className = "check-item";
-          row.innerHTML = '<input type="checkbox" ' + (item.done ? "checked" : "") + ' /> <span>' + item.text + '</span><button class="check-delete" data-check-id="' + item.id + '">x</button>';
+          row.innerHTML = '<input type="checkbox" ' + (item.done ? "checked" : "") + ' /> <span>' + item.text + '</span><button class="check-delete" title="Удалить пункт чеклиста" data-check-id="' + item.id + '">x</button>';
           row.querySelector("input").addEventListener("change", (event) => {
             vscode.postMessage({ type: "toggleChecklist", taskId: task.id, checklistId: item.id, done: event.target.checked });
           });
@@ -663,6 +748,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
             taskId: task.id,
             title: host.querySelector("#detail-title").value,
             priority: host.querySelector("#detail-priority").value,
+            owner: host.querySelector("#detail-owner").value,
             description: host.querySelector("#detail-description").value,
             linksText,
             linksInvalid
@@ -675,8 +761,18 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
 
         host.querySelector("#detail-title").addEventListener("input", onDetailChanged);
         host.querySelector("#detail-priority").addEventListener("change", onDetailChanged);
+        host.querySelector("#detail-owner").addEventListener("change", onDetailChanged);
         host.querySelector("#detail-description").addEventListener("input", onDetailChanged);
         host.querySelector("#detail-links").addEventListener("input", onDetailChanged);
+        host.querySelector("#close-details-btn").addEventListener("click", () => {
+          flushDetailSave();
+          state.detailsOpen = false;
+          state.selectedTaskId = null;
+          state.detailDraft = null;
+          state.detailDirty = false;
+          state.detailSaving = false;
+          renderAll();
+        });
 
         host.querySelector("#delete-task-btn").addEventListener("click", () => {
           state.detailDirty = false;
@@ -700,6 +796,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
           const btn = document.createElement("button");
           btn.className = "btn";
           btn.textContent = name;
+          btn.title = "Открыть документ " + name;
           btn.addEventListener("click", () => {
             flushDocSave();
             state.selectedDoc = name;
@@ -783,6 +880,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
       }
 
       function renderAll() {
+        applyDetailsLayout();
         renderBoard();
         renderDetails();
         renderDocs();
@@ -814,6 +912,10 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         state.priorityFilter = event.target.value;
         renderBoard();
       });
+      document.getElementById("owner-filter").addEventListener("change", (event) => {
+        state.ownerFilter = event.target.value;
+        renderBoard();
+      });
 
       document.getElementById("activity-filter").addEventListener("change", (event) => {
         state.activityFilter = event.target.value;
@@ -829,6 +931,9 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
       }
 
       document.getElementById("new-task-btn").addEventListener("click", createTaskFromInput);
+      document.getElementById("run-cycle-btn").addEventListener("click", () => {
+        vscode.postMessage({ type: "runCycle" });
+      });
       document.getElementById("new-task-title").addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
           event.preventDefault();

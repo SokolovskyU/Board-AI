@@ -46,6 +46,7 @@ export function syncTasksFromOutbox(outbox: string, currentData: ProjectControlD
       title,
       priority: inferPriority(line),
       status: "todo",
+      owner: "builder",
       description: `Imported from agent outbox:\n\n${line}`,
       links: [],
       checklist: [],

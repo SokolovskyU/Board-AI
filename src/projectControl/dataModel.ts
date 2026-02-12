@@ -4,7 +4,8 @@ import {
   sanitizeLinks,
   sanitizeTitle
 } from "./constraints";
-import { ActivityItem, ProjectControlData, Task, TaskStatus } from "./types";
+import { repairCommonMojibake } from "./encoding";
+import { ActivityItem, ProjectControlData, Task, TaskOwner, TaskStatus } from "./types";
 
 function now(): number {
   return Date.now();
@@ -56,16 +57,30 @@ export function normalizeData(input: unknown): ProjectControlData {
             typed.priority === "low" || typed.priority === "medium" || typed.priority === "high"
               ? typed.priority
               : "medium";
+          const owner: TaskOwner =
+            typed.owner === "planner" ||
+            typed.owner === "builder" ||
+            typed.owner === "qa" ||
+            typed.owner === "scribe"
+              ? typed.owner
+              : "builder";
 
           return {
             id: typeof typed.id === "string" ? typed.id : makeId("task"),
-            title: sanitizeTitle(typed.title),
+            title: sanitizeTitle(repairCommonMojibake(typeof typed.title === "string" ? typed.title : "")),
             priority,
             status,
-            description: sanitizeDescription(typed.description),
-            links: sanitizeLinks(typed.links),
+            owner,
+            description: sanitizeDescription(
+              repairCommonMojibake(typeof typed.description === "string" ? typed.description : "")
+            ),
+            links: sanitizeLinks(typed.links).map((link) => ({
+              label: repairCommonMojibake(link.label),
+              href: link.href
+            })),
             checklist: sanitizeChecklist(typed.checklist).map((item) => ({
               ...item,
+              text: repairCommonMojibake(item.text),
               id: item.id || makeId("check")
             })),
             createdAt,
@@ -83,7 +98,7 @@ export function normalizeData(input: unknown): ProjectControlData {
           return {
             id: typeof typed.id === "string" ? typed.id : makeId("act"),
             type: typeof typed.type === "string" ? typed.type : "note",
-            message: typeof typed.message === "string" ? typed.message : "",
+            message: repairCommonMojibake(typeof typed.message === "string" ? typed.message : ""),
             ts: typeof typed.ts === "number" ? typed.ts : now(),
             taskId: typeof typed.taskId === "string" ? typed.taskId : undefined
           };
@@ -93,7 +108,10 @@ export function normalizeData(input: unknown): ProjectControlData {
   return {
     version: 1,
     tasks,
-    docMarkdown: typeof raw.docMarkdown === "string" ? raw.docMarkdown : fallback.docMarkdown,
+    docMarkdown:
+      typeof raw.docMarkdown === "string"
+        ? repairCommonMojibake(raw.docMarkdown)
+        : fallback.docMarkdown,
     activity
   };
 }

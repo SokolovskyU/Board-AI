@@ -5,17 +5,23 @@ Project Control is a VS Code webview app that visualizes agent execution inside 
 Key idea:
 - Codex chat (right panel) remains the main control interface.
 - Project Control shows board/docs/activity state and task details.
+- Typical flow: user writes prompt in chat, Codex fills `To Do`, then moves tasks to `In Progress` and `Done` while executing.
+- Task descriptions/checklists can be maintained in Russian.
+- Recommended execution mode: fill full `To Do` plan first, then execute tasks one by one (`To Do` -> `In Progress` -> `Done`) for clear realtime visibility.
 
 ## Features (v0.1)
 
 - Command: `Project Control: Open`
 - Command: `Project Control: Ingest Prompt`
 - Command: `Project Control: Sync From Outbox`
+- Command: `Project Control: Run Multi-Agent Cycle`
 - Auto-open on workspace start (once per session), controlled by `projectControl.autoOpen`.
 - Webview tabs: `Board`, `Docs`, `Activity`.
 - Board columns: `Backlog`, `To Do`, `In Progress`, `Done`.
 - Drag and drop tasks across columns.
 - Search + priority filter (`all/low/medium/high`).
+- Owner model for tasks: `planner`, `builder`, `qa`, `scribe`.
+- Owner filter on board.
 - Task Details right side panel:
   - title, priority, status
   - markdown description preview
@@ -31,6 +37,9 @@ Key idea:
 - Global activity feed with timestamps.
 - Activity filters: `All`, `Tasks`, `Docs`, `Agent`.
 - Toast feedback for important actions and validation results.
+- Multi-agent step execution via `Run Multi-Agent Cycle`:
+  - starts next `todo` task in `inprogress`
+  - handoff chain: `builder -> qa -> scribe -> done`
 
 ## Storage Layout
 

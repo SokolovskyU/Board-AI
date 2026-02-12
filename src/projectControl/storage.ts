@@ -1,10 +1,10 @@
 import * as vscode from "vscode";
-import { TextDecoder, TextEncoder } from "util";
+import { TextEncoder } from "util";
 import { emptyData, normalizeData } from "./dataModel";
+import { decodeTextBytes, repairCommonMojibake } from "./encoding";
 import { ProjectControlData, TaskStatus } from "./types";
 import { makeEntityId as generateEntityId, sanitizeDocName } from "./utils";
 
-const decoder = new TextDecoder();
 const encoder = new TextEncoder();
 
 const ROOT_DIR = ".project-control";
@@ -18,6 +18,12 @@ const DEFAULT_CONTRACT = `# Agent Contract
 
 This file defines how the coding agent should update Project Control.
 
+## Execution Mode
+- Work in two phases:
+  1) Fill and refine the full \`todo\` queue first.
+  2) Execute tasks one by one: \`todo\` -> \`inprogress\` -> \`done\`.
+- Keep only one task in \`inprogress\` unless the user explicitly requests parallel execution.
+
 ## Inputs
 - Read planning instructions from \`.project-control/agent_inbox.md\`.
 - Convert user intent into actionable tasks.
@@ -25,6 +31,7 @@ This file defines how the coding agent should update Project Control.
 ## Task Creation Rules
 - Create clear task titles focused on concrete outcomes.
 - Set priority as \`low\`, \`medium\`, or \`high\`.
+- Assign \`owner\` as one of: \`planner\`, \`builder\`, \`qa\`, \`scribe\`.
 - Use \`todo\` for ready tasks, \`backlog\` for deferred tasks.
 - Fill \`description\` with execution details.
 - Add \`checklist\` steps for implementation and verification.
@@ -34,6 +41,10 @@ This file defines how the coding agent should update Project Control.
 - Move to \`inprogress\` when work starts.
 - Move to \`done\` only after implementation and validation.
 - Keep unfinished items in \`todo\` or \`backlog\`.
+- Ensure board reflects realtime state:
+  - planned (\`todo\`)
+  - currently executing (\`inprogress\`)
+  - completed (\`done\`)
 
 ## Activity Rules
 - Log major lifecycle events in global activity.
@@ -111,7 +122,7 @@ export class ProjectControlStorage {
     await this.ensureStructure();
     try {
       const bytes = await vscode.workspace.fs.readFile(this.getDataUri());
-      const parsed = JSON.parse(decoder.decode(bytes)) as unknown;
+      const parsed = JSON.parse(decodeTextBytes(bytes)) as unknown;
       return normalizeData(parsed);
     } catch {
       return emptyData();
@@ -136,7 +147,7 @@ export class ProjectControlStorage {
     const uri = this.getDocUri(name);
     try {
       const bytes = await vscode.workspace.fs.readFile(uri);
-      return decoder.decode(bytes);
+      return decodeTextBytes(bytes);
     } catch {
       const seeded = `# ${name}\n\n`;
       await this.writeDoc(name, seeded);
@@ -146,21 +157,21 @@ export class ProjectControlStorage {
 
   async writeDoc(name: string, content: string): Promise<void> {
     const safeName = sanitizeDocName(name);
-    await this.writeText(this.getDocUri(safeName), content);
+    await this.writeText(this.getDocUri(safeName), repairCommonMojibake(content));
   }
 
   async readInbox(): Promise<string> {
     const bytes = await vscode.workspace.fs.readFile(this.getAgentInboxUri());
-    return decoder.decode(bytes);
+    return decodeTextBytes(bytes);
   }
 
   async writeOutbox(content: string): Promise<void> {
-    await this.writeText(this.getAgentOutboxUri(), content);
+    await this.writeText(this.getAgentOutboxUri(), repairCommonMojibake(content));
   }
 
   async readOutbox(): Promise<string> {
     const bytes = await vscode.workspace.fs.readFile(this.getAgentOutboxUri());
-    return decoder.decode(bytes);
+    return decodeTextBytes(bytes);
   }
 
   async appendActivity(

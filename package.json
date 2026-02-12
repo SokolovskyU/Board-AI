@@ -13,7 +13,8 @@
     "onStartupFinished",
     "onCommand:projectControl.open",
     "onCommand:projectControl.ingestPrompt",
-    "onCommand:projectControl.syncFromOutbox"
+    "onCommand:projectControl.syncFromOutbox",
+    "onCommand:projectControl.runMultiAgentCycle"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -29,6 +30,10 @@
       {
         "command": "projectControl.syncFromOutbox",
         "title": "Project Control: Sync From Outbox"
+      },
+      {
+        "command": "projectControl.runMultiAgentCycle",
+        "title": "Project Control: Run Multi-Agent Cycle"
       }
     ],
     "configuration": {

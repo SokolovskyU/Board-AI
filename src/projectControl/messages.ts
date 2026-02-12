@@ -6,10 +6,14 @@ import {
   sanitizeLinks,
   sanitizeTitle
 } from "./constraints";
+import { repairCommonMojibake } from "./encoding";
 import { makeEntityId, sanitizeDocName } from "./utils";
-import { ProjectControlData, Task, TaskStatus } from "./types";
+import { ProjectControlData, Task, TaskOwner, TaskStatus } from "./types";
 
 type MessageWithType = { type?: unknown; [key: string]: unknown };
+function safeText(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
 
 export interface DataMessageResult {
   handled: boolean;
@@ -26,6 +30,9 @@ export interface DataMessageResult {
 
 function isTaskStatus(value: unknown): value is TaskStatus {
   return value === "backlog" || value === "todo" || value === "inprogress" || value === "done";
+}
+function isTaskOwner(value: unknown): value is TaskOwner {
+  return value === "planner" || value === "builder" || value === "qa" || value === "scribe";
 }
 
 function activity(
@@ -65,6 +72,7 @@ export function processDataMessage(inputData: ProjectControlData, message: Messa
         title,
         priority: "medium",
         status: "todo",
+        owner: "builder",
         description: "",
         links: [],
         checklist: [],
@@ -81,6 +89,7 @@ export function processDataMessage(inputData: ProjectControlData, message: Messa
         patch?: {
           title?: unknown;
           priority?: unknown;
+          owner?: unknown;
           description?: unknown;
           links?: unknown;
         };
@@ -99,8 +108,11 @@ export function processDataMessage(inputData: ProjectControlData, message: Messa
       ) {
         task.priority = typed.patch.priority;
       }
+      if (isTaskOwner(typed.patch.owner)) {
+        task.owner = typed.patch.owner;
+      }
       if (typeof typed.patch.description === "string") {
-        task.description = sanitizeDescription(typed.patch.description);
+        task.description = sanitizeDescription(repairCommonMojibake(safeText(typed.patch.description)));
       }
       let droppedLinks = 0;
       if (Array.isArray(typed.patch.links)) {
@@ -154,7 +166,7 @@ export function processDataMessage(inputData: ProjectControlData, message: Messa
       return {
         handled: true,
         data,
-        notice: { kind: "success", message: "Checklist item added." }
+        notice: { kind: "success", message: `Task moved to ${typed.status}.` }
       };
     }
     case "toggleChecklist": {
@@ -179,7 +191,7 @@ export function processDataMessage(inputData: ProjectControlData, message: Messa
       return {
         handled: true,
         data,
-        notice: { kind: "success", message: "Checklist item removed." }
+        notice: { kind: "success", message: "Checklist updated." }
       };
     }
     case "addChecklistItem": {
@@ -213,7 +225,7 @@ export function processDataMessage(inputData: ProjectControlData, message: Messa
       }
       task.checklist.push({
         id: makeEntityId("check"),
-        text,
+        text: repairCommonMojibake(text),
         done: false
       });
       task.updatedAt = Date.now();
@@ -237,14 +249,14 @@ export function processDataMessage(inputData: ProjectControlData, message: Messa
     }
     case "saveMainDoc": {
       const typed = message as { content?: unknown };
-      data.docMarkdown = sanitizeDocContent(typed.content);
+      data.docMarkdown = sanitizeDocContent(repairCommonMojibake(safeText(typed.content)));
       activity(data, "doc_saved", "Main document saved.");
       return { handled: true, data };
     }
     case "saveDoc": {
       const typed = message as { name?: unknown; content?: unknown };
       const name = sanitizeDocName(typeof typed.name === "string" ? typed.name : "");
-      const content = sanitizeDocContent(typed.content);
+      const content = sanitizeDocContent(repairCommonMojibake(safeText(typed.content)));
       activity(data, "doc_saved", `Document saved: ${name}`);
       return {
         handled: true,

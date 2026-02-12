@@ -1,6 +1,286 @@
-{
-  "version": 1,
-  "tasks": [],
-  "docMarkdown": "# Project Notes\n\nUse this document as the main project context.\n",
-  "activity": []
+﻿{
+    "version":  1,
+    "tasks":  [
+                  {
+                      "id":  "task_gitignore_audit",
+                      "title":  "Проверить покрытие .gitignore",
+                      "priority":  "medium",
+                      "status":  "done",
+                      "owner":  "planner",
+                      "description":  "Проверить стек проекта и определить, какие артефакты сборки, тестов и локальной среды должны игнорироваться в Git.",
+                      "links":  [
+
+                                ],
+                      "checklist":  [
+                                        "Проверить текущий .gitignore",
+                                        "Сверить с фактическими директориями проекта",
+                                        "Подготовить список необходимых правил"
+                                    ],
+                      "createdAt":  1770919662351,
+                      "updatedAt":  1770919686901
+                  },
+                  {
+                      "id":  "task_gitignore_update",
+                      "title":  "Обновить .gitignore",
+                      "priority":  "high",
+                      "status":  "done",
+                      "owner":  "builder",
+                      "description":  "Добавить недостающие правила в .gitignore для Node.js/TypeScript VS Code extension: кеши, логи, временные файлы, IDE и артефакты упаковки.",
+                      "links":  [
+
+                                ],
+                      "checklist":  [
+                                        "Добавить правила для артефактов разработки",
+                                        "Проверить, что рабочее дерево стало чище",
+                                        "Убедиться, что важные файлы проекта не игнорируются"
+                                    ],
+                      "createdAt":  1770919662351,
+                      "updatedAt":  1770919714034
+                  }
+              ],
+    "docMarkdown":  "# Project Notes\n\nUse this document as the main project context.\nР°Р±СЂР°РєР°РґР°Р±СЂР° С‚РµСЃС‚\n",
+    "activity":  [
+                     {
+                         "id":  "act_1770919714034",
+                         "type":  "task_status",
+                         "message":  "Задача завершена: Обновить .gitignore и проверить статус Git.",
+                         "ts":  1770919714034,
+                         "taskId":  "task_gitignore_update"
+                     },
+                     {
+                         "id":  "act_1770919686902",
+                         "type":  "task_status",
+                         "message":  "Задача завершена: Проверить покрытие .gitignore",
+                         "ts":  1770919686902,
+                         "taskId":  "task_gitignore_audit"
+                     },
+                     {
+                         "id":  "act_1770919686903",
+                         "type":  "task_status",
+                         "message":  "Задача начата: Обновить .gitignore",
+                         "ts":  1770919686903,
+                         "taskId":  "task_gitignore_update"
+                     },
+                     {
+                         "id":  "act_1770919672578",
+                         "type":  "task_status",
+                         "message":  "Задача начата: Проверить покрытие .gitignore",
+                         "ts":  1770919672578,
+                         "taskId":  "task_gitignore_audit"
+                     },
+                     {
+                         "id":  "act_1770919662351",
+                         "type":  "plan_updated",
+                         "message":  "План обновлен: сформирован список задач в todo перед началом работ.",
+                         "ts":  1770919662351
+                     },
+                     {
+                         "id":  "act_mljfq5zz_ksyjsc",
+                         "type":  "task_created",
+                         "message":  "Task created: Р°",
+                         "ts":  1770899311583,
+                         "taskId":  "task_mljfq5zz_svfqts"
+                     },
+                     {
+                         "id":  "act_mljfq26v_bhfyv6",
+                         "type":  "task_deleted",
+                         "message":  "Task deleted: Р°РІР°",
+                         "ts":  1770899306647,
+                         "taskId":  "task_mljdsxn9_u6rc09"
+                     },
+                     {
+                         "id":  "act_mljfq1q2_vhdm1k",
+                         "type":  "task_deleted",
+                         "message":  "Task deleted: РўРµСЃС‚С‹ РїСЂРѕС…РѕРґСЏС‚.",
+                         "ts":  1770899306042,
+                         "taskId":  "task_mljdzjzj_qoh2zj"
+                     },
+                     {
+                         "id":  "act_mljfq1ba_2corjz",
+                         "type":  "task_deleted",
+                         "message":  "Task deleted: Docs СЃРѕС…СЂР°РЅСЏСЋС‚СЃСЏ Р±РµР· РєРЅРѕРїРєРё.",
+                         "ts":  1770899305510,
+                         "taskId":  "task_mljdzjzj_0vi7va"
+                     },
+                     {
+                         "id":  "act_mljfq0wx_1r3i9m",
+                         "type":  "task_deleted",
+                         "message":  "Task deleted: РњРѕР¶РЅРѕ РґРѕР±Р°РІР»СЏС‚СЊ/СѓРґР°Р»СЏС‚СЊ checklist РїСѓРЅРєС‚С‹ РёР· UI.",
+                         "ts":  1770899304993,
+                         "taskId":  "task_mljdzjzj_lbqdhj"
+                     },
+                     {
+                         "id":  "act_mljfq0de_t0y1ea",
+                         "type":  "task_deleted",
+                         "message":  "Task deleted: РўРµСЃС‚С‹",
+                         "ts":  1770899304290,
+                         "taskId":  "task_mljdzjzj_icmoou"
+                     },
+                     {
+                         "id":  "act_mljfpzn4_x8fgqf",
+                         "type":  "task_deleted",
+                         "message":  "Task deleted: Checklist CRUD вЂ” high",
+                         "ts":  1770899303344,
+                         "taskId":  "task_mljdzjzj_wtu3qc"
+                     },
+                     {
+                         "id":  "act_mljfpz8c_yvs1kg",
+                         "type":  "task_deleted",
+                         "message":  "Task deleted: Р”РѕР±Р°РІРёС‚СЊ unit-С‚РµСЃС‚С‹ РґР»СЏ ingest Рё normalizeData.",
+                         "ts":  1770899302812,
+                         "taskId":  "task_mljdzjzj_8kjh4k"
+                     },
+                     {
+                         "id":  "act_mljfpyl5_ftympa",
+                         "type":  "task_deleted",
+                         "message":  "Task deleted: РџРѕРєР°Р·Р°С‚СЊ РёРЅРґРёРєР°С‚РѕСЂ saved/unsaved РІ Docs.",
+                         "ts":  1770899301977,
+                         "taskId":  "task_mljdzjzj_vfesc7"
+                     },
+                     {
+                         "id":  "act_mljfpxtg_sa028u",
+                         "type":  "task_deleted",
+                         "message":  "Task deleted: РЎРґРµР»Р°С‚СЊ Р°РІС‚РѕСЃРѕС…СЂР°РЅРµРЅРёРµ Docs СЃ debounce.",
+                         "ts":  1770899300980,
+                         "taskId":  "task_mljdzjzj_hkxvkc"
+                     },
+                     {
+                         "id":  "act_mljfpxcp_13mktr",
+                         "type":  "task_deleted",
+                         "message":  "Task deleted: Р”РѕР±Р°РІРёС‚СЊ СЃРѕР·РґР°РЅРёРµ Рё СѓРґР°Р»РµРЅРёРµ РїСѓРЅРєС‚РѕРІ checklist РІ Task Details.",
+                         "ts":  1770899300377,
+                         "taskId":  "task_mljdzjzj_8kobcm"
+                     },
+                     {
+                         "id":  "act_mljfpwfk_si9uwm",
+                         "type":  "task_deleted",
+                         "message":  "Task deleted: РІР°Р°",
+                         "ts":  1770899299184,
+                         "taskId":  "task_mljed1xk_g7syc1"
+                     },
+                     {
+                         "id":  "act_mljed1xk_x7cmey",
+                         "type":  "task_created",
+                         "message":  "Task created: РІР°Р°",
+                         "ts":  1770897020168,
+                         "taskId":  "task_mljed1xk_g7syc1"
+                     },
+                     {
+                         "id":  "act_mljecs2n_6n11g6",
+                         "type":  "checklist_added",
+                         "message":  "Checklist item added: Рґ",
+                         "ts":  1770897007391,
+                         "taskId":  "task_mljdzjzj_icmoou"
+                     },
+                     {
+                         "id":  "act_mljecpna_xb7sj3",
+                         "type":  "task_status",
+                         "message":  "Task completed: РўРµСЃС‚С‹",
+                         "ts":  1770897004246,
+                         "taskId":  "task_mljdzjzj_icmoou"
+                     },
+                     {
+                         "id":  "act_mljecnth_w1uzfz",
+                         "type":  "task_updated",
+                         "message":  "Task updated: РўРµСЃС‚С‹",
+                         "ts":  1770897001877,
+                         "taskId":  "task_mljdzjzj_icmoou"
+                     },
+                     {
+                         "id":  "act_mljecfgw_1w3ssv",
+                         "type":  "task_updated",
+                         "message":  "Task updated: РўРµСЃС‚С‹ вЂ” medium",
+                         "ts":  1770896991056,
+                         "taskId":  "task_mljdzjzj_icmoou"
+                     },
+                     {
+                         "id":  "act_mljece0e_zs1n5i",
+                         "type":  "task_deleted",
+                         "message":  "Task deleted: Docs autosave вЂ” medium",
+                         "ts":  1770896989166,
+                         "taskId":  "task_mljdzjzj_b5x0m4"
+                     },
+                     {
+                         "id":  "act_mljecc0w_pagp6c",
+                         "type":  "task_status",
+                         "message":  "Task completed: Р”РѕР±Р°РІРёС‚СЊ unit-С‚РµСЃС‚С‹ РґР»СЏ ingest Рё normalizeData.",
+                         "ts":  1770896986592,
+                         "taskId":  "task_mljdzjzj_8kjh4k"
+                     },
+                     {
+                         "id":  "act_mljecb5n_o3ffsg",
+                         "type":  "task_status",
+                         "message":  "Task moved to backlog: Р”РѕР±Р°РІРёС‚СЊ СЃРѕР·РґР°РЅРёРµ Рё СѓРґР°Р»РµРЅРёРµ РїСѓРЅРєС‚РѕРІ checklist РІ Task Details.",
+                         "ts":  1770896985467,
+                         "taskId":  "task_mljdzjzj_8kobcm"
+                     },
+                     {
+                         "id":  "act_mljec5jt_pxwvtb",
+                         "type":  "doc_saved",
+                         "message":  "Main document saved.",
+                         "ts":  1770896978201
+                     },
+                     {
+                         "id":  "act_mljeb21d_5y7og5",
+                         "type":  "task_status",
+                         "message":  "Task started: РџРѕРєР°Р·Р°С‚СЊ РёРЅРґРёРєР°С‚РѕСЂ saved/unsaved РІ Docs.",
+                         "ts":  1770896926993,
+                         "taskId":  "task_mljdzjzj_vfesc7"
+                     },
+                     {
+                         "id":  "act_mljdzjzj_ite37l",
+                         "type":  "ingest",
+                         "message":  "Ingested prompt into 10 task(s).",
+                         "ts":  1770896390383
+                     },
+                     {
+                         "id":  "act_mljdvwb5_uo7w0m",
+                         "type":  "task_status",
+                         "message":  "Task moved to todo: Р°РІР°",
+                         "ts":  1770896219729,
+                         "taskId":  "task_mljdsxn9_u6rc09"
+                     },
+                     {
+                         "id":  "act_mljdvvm9_ywpum0",
+                         "type":  "task_status",
+                         "message":  "Task moved to backlog: Р°РІР°",
+                         "ts":  1770896218833,
+                         "taskId":  "task_mljdsxn9_u6rc09"
+                     },
+                     {
+                         "id":  "act_mljdvv0w_m1b0ze",
+                         "type":  "task_status",
+                         "message":  "Task moved to todo: Р°РІР°",
+                         "ts":  1770896218064,
+                         "taskId":  "task_mljdsxn9_u6rc09"
+                     },
+                     {
+                         "id":  "act_mljdt2zf_6xcgmi",
+                         "type":  "task_status",
+                         "message":  "Task started: Р°РІР°",
+                         "ts":  1770896088411,
+                         "taskId":  "task_mljdsxn9_u6rc09"
+                     },
+                     {
+                         "id":  "act_mljdt043_8yvk0c",
+                         "type":  "task_status",
+                         "message":  "Task completed: Р°РІР°",
+                         "ts":  1770896084691,
+                         "taskId":  "task_mljdsxn9_u6rc09"
+                     },
+                     {
+                         "id":  "act_mljdszhv_orw38j",
+                         "type":  "task_status",
+                         "message":  "Task started: Р°РІР°",
+                         "ts":  1770896083891,
+                         "taskId":  "task_mljdsxn9_u6rc09"
+                     },
+                     {
+                         "id":  "act_mljdsxn9_sv9c6b",
+                         "type":  "task_created",
+                         "message":  "Task created: Р°РІР°",
+                         "ts":  1770896081493,
+                         "taskId":  "task_mljdsxn9_u6rc09"
+                     }
+                 ]
 }
