@@ -236,6 +236,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
                 <option value="medium">medium</option>
                 <option value="high">high</option>
               </select>
+              <input id="new-task-title" placeholder="New task title..." />
               <button class="btn" id="new-task-btn">New Task</button>
             </div>
             <div class="columns" id="board-columns"></div>
@@ -498,10 +499,20 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         renderBoard();
       });
 
-      document.getElementById("new-task-btn").addEventListener("click", () => {
-        const title = prompt("Task title");
-        if (!title || !title.trim()) return;
-        vscode.postMessage({ type: "createTask", title: title.trim() });
+      function createTaskFromInput() {
+        const input = document.getElementById("new-task-title");
+        const title = (input.value || "").trim();
+        if (!title) return;
+        vscode.postMessage({ type: "createTask", title });
+        input.value = "";
+      }
+
+      document.getElementById("new-task-btn").addEventListener("click", createTaskFromInput);
+      document.getElementById("new-task-title").addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          createTaskFromInput();
+        }
       });
 
       document.getElementById("create-doc-btn").addEventListener("click", () => {
