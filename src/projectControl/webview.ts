@@ -160,6 +160,10 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         overflow: auto;
       }
       .details h2 { margin: 0 0 8px; }
+      .details-head { display: flex; align-items: center; gap: 8px; }
+      .detail-state { margin-left: auto; font-size: 12px; color: var(--muted); }
+      .detail-state.unsaved { color: var(--medium); }
+      .detail-state.saving { color: var(--accent); }
       .meta { display: flex; gap: 8px; margin: 8px 0 10px; align-items: center; }
       .details-section { margin-top: 10px; }
       .details-section label {
@@ -176,7 +180,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
       }
       .detail-actions {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 8px;
       }
       .mini-activity { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
@@ -316,9 +320,14 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         docDraft: "",
         docDirty: false,
         docSaving: false,
-        docSaveTimer: null
+        docSaveTimer: null,
+        detailDraft: null,
+        detailDirty: false,
+        detailSaving: false,
+        detailSaveTimer: null
       };
       const DOC_SAVE_DEBOUNCE_MS = 600;
+      const DETAIL_SAVE_DEBOUNCE_MS = 500;
 
       const statusOrder = ["backlog", "todo", "inprogress", "done"];
       const statusLabel = {
@@ -377,7 +386,13 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
               node.dataset.id = task.id;
               node.innerHTML = '<div class="card-title">' + task.title + '</div><span class="pill ' + task.priority + '">' + task.priority + '</span>';
               node.addEventListener("click", () => {
+                if (state.selectedTaskId && state.selectedTaskId !== task.id) {
+                  flushDetailSave();
+                }
                 state.selectedTaskId = task.id;
+                state.detailDraft = null;
+                state.detailDirty = false;
+                state.detailSaving = false;
                 renderDetails();
               });
               node.addEventListener("dragstart", (event) => {
@@ -411,30 +426,117 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         return state.data.tasks.find((task) => task.id === state.selectedTaskId) || null;
       }
 
+      function getDetailStateLabel() {
+        if (state.detailSaving) return { text: "Saving...", cls: "detail-state saving" };
+        if (state.detailDirty) return { text: "Unsaved", cls: "detail-state unsaved" };
+        return { text: "Saved", cls: "detail-state" };
+      }
+
+      function renderDetailStateIndicator() {
+        const label = getDetailStateLabel();
+        const el = document.getElementById("detail-save-state");
+        if (!el) {
+          return;
+        }
+        el.textContent = label.text;
+        el.className = label.cls;
+      }
+
+      function linksToText(links) {
+        return (links || []).map((link) => link.label + "|" + link.href).join("\\n");
+      }
+
+      function parseLinks(text) {
+        return text
+          .split("\\n")
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => {
+            const [label, href] = line.split("|");
+            return {
+              label: (label || "Link").trim(),
+              href: (href || "").trim()
+            };
+          })
+          .filter((link) => link.href.length > 0);
+      }
+
+      function currentDetailPayload(task) {
+        const draft = state.detailDraft && state.detailDraft.taskId === task.id ? state.detailDraft : null;
+        return {
+          title: draft ? draft.title : task.title,
+          priority: draft ? draft.priority : task.priority,
+          description: draft ? draft.description : (task.description || ""),
+          linksText: draft ? draft.linksText : linksToText(task.links || [])
+        };
+      }
+
+      function saveTaskDetails() {
+        const task = selectedTask();
+        if (!task || !state.detailDirty || !state.detailDraft || state.detailDraft.taskId !== task.id) {
+          return;
+        }
+        state.detailSaving = true;
+        renderDetailStateIndicator();
+        vscode.postMessage({
+          type: "updateTask",
+          taskId: task.id,
+          patch: {
+            title: state.detailDraft.title,
+            priority: state.detailDraft.priority,
+            description: state.detailDraft.description,
+            links: parseLinks(state.detailDraft.linksText)
+          }
+        });
+      }
+
+      function scheduleDetailSave() {
+        if (state.detailSaveTimer) {
+          clearTimeout(state.detailSaveTimer);
+        }
+        state.detailSaveTimer = setTimeout(() => {
+          state.detailSaveTimer = null;
+          saveTaskDetails();
+        }, DETAIL_SAVE_DEBOUNCE_MS);
+      }
+
+      function flushDetailSave() {
+        if (state.detailSaveTimer) {
+          clearTimeout(state.detailSaveTimer);
+          state.detailSaveTimer = null;
+        }
+        saveTaskDetails();
+      }
+
       function renderDetails() {
         const host = document.getElementById("task-details");
         const task = selectedTask();
         if (!task) {
+          state.detailDraft = null;
+          state.detailDirty = false;
+          state.detailSaving = false;
           host.innerHTML = '<div class="empty">Select a task card to view details.</div>';
           return;
         }
 
+        const detail = currentDetailPayload(task);
+        const detailState = getDetailStateLabel();
         const taskActivity = state.data.activity.filter((item) => item.taskId === task.id).slice(0, 6);
         host.innerHTML =
-          '<h2>' + task.title + '</h2>' +
+          '<div class="details-head"><h2>' + task.title + '</h2><span id="detail-save-state" class="' + detailState.cls + '">' + detailState.text + "</span></div>" +
           '<div class="meta"><span class="pill ' + task.priority + '">' + task.priority + '</span><span class="muted">' + statusLabel[task.status] + '</span></div>' +
           '<div class="details-section detail-grid">' +
-          '<div><label>Title</label><input id="detail-title" value="' + task.title.replace(/"/g, "&quot;") + '" /></div>' +
+          '<div><label>Title</label><input id="detail-title" maxlength="120" value="' + detail.title.replace(/"/g, "&quot;") + '" /></div>' +
           '<div><label>Priority</label><select id="detail-priority"><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></div>' +
           '</div>' +
-          '<div class="details-section"><label>Description (Markdown)</label><textarea id="detail-description">' + (task.description || "") + '</textarea></div>' +
-          '<div class="preview">' + markdownToHtml(task.description || "") + '</div>' +
+          '<div class="details-section"><label>Description (Markdown)</label><textarea id="detail-description">' + detail.description + '</textarea></div>' +
+          '<div class="preview">' + markdownToHtml(detail.description) + '</div>' +
           '<div class="details-section"><label>Links (one per line: label|https://...)</label><textarea id="detail-links">' +
-          (task.links || []).map((link) => link.label + "|" + link.href).join("\\n") +
+          detail.linksText +
           '</textarea></div>' +
           '<div class="link-list">' + (task.links || []).map((link) => '<div><a href="' + link.href + '" target="_blank" rel="noreferrer">' + link.label + '</a></div>').join("") + '</div>' +
           '<div class="details-section"><label>Checklist</label><div id="checklist"></div><div class="check-create"><input id="new-check-item" placeholder="Add checklist item..." /><button class="btn" id="add-check-btn">Add</button></div></div>' +
-          '<div class="detail-actions"><button class="btn" id="edit-task-btn">Edit</button><button class="btn danger" id="delete-task-btn">Delete</button><button class="btn" id="start-task-btn">Start</button><button class="btn" id="complete-task-btn">Complete</button></div>' +
+          '<div class="detail-actions"><button class="btn danger" id="delete-task-btn">Delete</button><button class="btn" id="start-task-btn">Start</button><button class="btn" id="complete-task-btn">Complete</button></div>' +
           '<div class="mini-activity"><strong>Mini activity</strong><div>' +
           (taskActivity.length
             ? taskActivity.map((item) => '<div class="act-item">' + formatTs(item.ts) + " - " + item.message + "</div>").join("")
@@ -442,7 +544,7 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
           "</div></div>";
 
         const priority = host.querySelector("#detail-priority");
-        priority.value = task.priority;
+        priority.value = detail.priority;
 
         const checklistHost = host.querySelector("#checklist");
         (task.checklist || []).forEach((item) => {
@@ -473,26 +575,31 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
           }
         });
 
-        host.querySelector("#edit-task-btn").addEventListener("click", () => {
-          const title = host.querySelector("#detail-title").value.trim();
-          const nextPriority = host.querySelector("#detail-priority").value;
-          const description = host.querySelector("#detail-description").value;
-          const links = host
-            .querySelector("#detail-links")
-            .value.split("\\n")
-            .map((line) => line.trim())
-            .filter(Boolean)
-            .map((line) => {
-              const [label, href] = line.split("|");
-              return {
-                label: (label || "Link").trim(),
-                href: (href || "").trim()
-              };
-            })
-            .filter((link) => link.href.length > 0);
-          vscode.postMessage({ type: "updateTask", taskId: task.id, patch: { title, priority: nextPriority, description, links } });
+        function onDetailChanged() {
+          state.detailDraft = {
+            taskId: task.id,
+            title: host.querySelector("#detail-title").value,
+            priority: host.querySelector("#detail-priority").value,
+            description: host.querySelector("#detail-description").value,
+            linksText: host.querySelector("#detail-links").value
+          };
+          state.detailDirty = true;
+          state.detailSaving = false;
+          renderDetailStateIndicator();
+          scheduleDetailSave();
+        }
+
+        host.querySelector("#detail-title").addEventListener("input", onDetailChanged);
+        host.querySelector("#detail-priority").addEventListener("change", onDetailChanged);
+        host.querySelector("#detail-description").addEventListener("input", onDetailChanged);
+        host.querySelector("#detail-links").addEventListener("input", onDetailChanged);
+
+        host.querySelector("#delete-task-btn").addEventListener("click", () => {
+          state.detailDirty = false;
+          state.detailSaving = false;
+          state.detailDraft = null;
+          vscode.postMessage({ type: "deleteTask", taskId: task.id });
         });
-        host.querySelector("#delete-task-btn").addEventListener("click", () => vscode.postMessage({ type: "deleteTask", taskId: task.id }));
         host.querySelector("#start-task-btn").addEventListener("click", () => vscode.postMessage({ type: "moveTask", id: task.id, status: "inprogress" }));
         host.querySelector("#complete-task-btn").addEventListener("click", () => vscode.postMessage({ type: "moveTask", id: task.id, status: "done" }));
       }
@@ -589,6 +696,9 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
           if (tab !== "docs") {
             flushDocSave();
           }
+          if (tab !== "board") {
+            flushDetailSave();
+          }
           document.querySelectorAll(".tab").forEach((btn) => btn.classList.remove("active"));
           document.querySelectorAll(".view").forEach((view) => view.classList.remove("active"));
           tabBtn.classList.add("active");
@@ -663,6 +773,9 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
           state.docDraft = state.data.docMarkdown || "";
           state.docDirty = false;
           state.docSaving = false;
+          state.detailDraft = null;
+          state.detailDirty = false;
+          state.detailSaving = false;
           if (!state.selectedTaskId && state.data.tasks[0]) {
             state.selectedTaskId = state.data.tasks[0].id;
           }
@@ -673,6 +786,17 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
             state.docDraft = state.data.docMarkdown || "";
             state.docDirty = false;
             state.docSaving = false;
+          }
+          const selected = selectedTask();
+          if (!selected) {
+            state.selectedTaskId = state.data.tasks[0] ? state.data.tasks[0].id : null;
+            state.detailDraft = null;
+            state.detailDirty = false;
+            state.detailSaving = false;
+          } else if (state.detailSaving) {
+            state.detailSaving = false;
+            state.detailDirty = false;
+            state.detailDraft = null;
           }
           renderAll();
         } else if (message.type === "docContent") {

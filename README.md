@@ -19,12 +19,14 @@ Key idea:
   - title, priority, status
   - markdown description preview
   - links
-  - checklist toggle
+  - checklist CRUD (add/toggle/delete)
   - mini activity
-  - actions: Edit / Delete / Start / Complete
+  - autosave for title/priority/description/links with Saved/Unsaved indicator
+  - actions: Delete / Start / Complete
 - Docs:
   - main markdown document (stored in data.json)
   - additional docs from `.project-control/docs/*.md`
+  - autosave with debounce and Saved/Unsaved indicator
 - Global activity feed with timestamps.
 
 ## Storage Layout
@@ -72,6 +74,7 @@ Data schema (`.project-control/data.json`):
 ```bash
 npm install
 npm run compile
+npm test
 ```
 
 Then run extension in VS Code debugger (`F5`).

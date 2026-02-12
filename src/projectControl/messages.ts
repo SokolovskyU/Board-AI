@@ -1,4 +1,12 @@
-import { makeEntityId, sanitizeDocName } from "./storage";
+import {
+  MAX_CHECKLIST_ITEMS_PER_TASK,
+  sanitizeChecklistText,
+  sanitizeDescription,
+  sanitizeDocContent,
+  sanitizeLinks,
+  sanitizeTitle
+} from "./constraints";
+import { makeEntityId, sanitizeDocName } from "./utils";
 import { ProjectControlData, Task, TaskStatus } from "./types";
 
 type MessageWithType = { type?: unknown; [key: string]: unknown };
@@ -46,7 +54,7 @@ export function processDataMessage(inputData: ProjectControlData, message: Messa
   switch (message.type) {
     case "createTask": {
       const typed = message as { title?: unknown };
-      const title = typeof typed.title === "string" && typed.title.trim() ? typed.title.trim() : "New task";
+      const title = sanitizeTitle(typed.title);
       const ts = Date.now();
       const task: Task = {
         id: makeEntityId("task"),
@@ -77,8 +85,8 @@ export function processDataMessage(inputData: ProjectControlData, message: Messa
       if (!task || !typed.patch || typeof typed.patch !== "object") {
         return { handled: false, data };
       }
-      if (typeof typed.patch.title === "string" && typed.patch.title.trim()) {
-        task.title = typed.patch.title.trim();
+      if (typeof typed.patch.title === "string") {
+        task.title = sanitizeTitle(typed.patch.title);
       }
       if (
         typed.patch.priority === "low" ||
@@ -88,19 +96,10 @@ export function processDataMessage(inputData: ProjectControlData, message: Messa
         task.priority = typed.patch.priority;
       }
       if (typeof typed.patch.description === "string") {
-        task.description = typed.patch.description;
+        task.description = sanitizeDescription(typed.patch.description);
       }
       if (Array.isArray(typed.patch.links)) {
-        task.links = typed.patch.links
-          .filter((link) => link && typeof link === "object")
-          .map((link) => {
-            const typedLink = link as { label?: unknown; href?: unknown };
-            return {
-              label: typeof typedLink.label === "string" ? typedLink.label : "Link",
-              href: typeof typedLink.href === "string" ? typedLink.href : ""
-            };
-          })
-          .filter((link) => Boolean(link.href));
+        task.links = sanitizeLinks(typed.patch.links);
       }
       task.updatedAt = Date.now();
       activity(data, "task_updated", `Task updated: ${task.title}`, task.id, task.updatedAt);
@@ -157,8 +156,12 @@ export function processDataMessage(inputData: ProjectControlData, message: Messa
     case "addChecklistItem": {
       const typed = message as { taskId?: unknown; text?: unknown };
       const task = data.tasks.find((item) => item.id === typed.taskId);
-      const text = typeof typed.text === "string" ? typed.text.trim() : "";
+      const text = sanitizeChecklistText(typed.text);
       if (!task || !text) {
+        return { handled: false, data };
+      }
+      const exists = task.checklist.some((item) => item.text.toLowerCase() === text.toLowerCase());
+      if (exists || task.checklist.length >= MAX_CHECKLIST_ITEMS_PER_TASK) {
         return { handled: false, data };
       }
       task.checklist.push({
@@ -187,14 +190,14 @@ export function processDataMessage(inputData: ProjectControlData, message: Messa
     }
     case "saveMainDoc": {
       const typed = message as { content?: unknown };
-      data.docMarkdown = typeof typed.content === "string" ? typed.content : "";
+      data.docMarkdown = sanitizeDocContent(typed.content);
       activity(data, "doc_saved", "Main document saved.");
       return { handled: true, data };
     }
     case "saveDoc": {
       const typed = message as { name?: unknown; content?: unknown };
       const name = sanitizeDocName(typeof typed.name === "string" ? typed.name : "");
-      const content = typeof typed.content === "string" ? typed.content : "";
+      const content = sanitizeDocContent(typed.content);
       activity(data, "doc_saved", `Document saved: ${name}`);
       return {
         handled: true,

@@ -1,5 +1,6 @@
 import { ProjectControlData, Task, TaskPriority } from "./types";
-import { makeEntityId, normalizeData } from "./storage";
+import { normalizeData } from "./dataModel";
+import { makeEntityId } from "./utils";
 
 function inferPriority(line: string): TaskPriority {
   const lower = line.toLowerCase();

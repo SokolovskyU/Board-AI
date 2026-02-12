@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import { TextDecoder, TextEncoder } from "util";
-import { ActivityItem, ProjectControlData, Task, TaskStatus } from "./types";
+import { emptyData, normalizeData } from "./dataModel";
+import { ProjectControlData, TaskStatus } from "./types";
+import { makeEntityId as generateEntityId, sanitizeDocName } from "./utils";
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
@@ -11,11 +13,6 @@ const DATA_FILE = "data.json";
 const AGENT_CONTRACT_FILE = "AGENT_CONTRACT.md";
 const AGENT_INBOX_FILE = "agent_inbox.md";
 const AGENT_OUTBOX_FILE = "agent_outbox.md";
-
-const DEFAULT_DOC = `# Project Notes
-
-Use this document as the main project context.
-`;
 
 const DEFAULT_CONTRACT = `# Agent Contract
 
@@ -60,101 +57,6 @@ No processed prompt yet.
 
 function now(): number {
   return Date.now();
-}
-
-function makeId(prefix: string): string {
-  return `${prefix}_${now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-export function emptyData(): ProjectControlData {
-  return {
-    version: 1,
-    tasks: [],
-    docMarkdown: DEFAULT_DOC,
-    activity: []
-  };
-}
-
-export function normalizeData(input: unknown): ProjectControlData {
-  const fallback = emptyData();
-  if (!input || typeof input !== "object") {
-    return fallback;
-  }
-
-  const raw = input as Partial<ProjectControlData>;
-  const tasks = Array.isArray(raw.tasks)
-    ? raw.tasks
-        .map((task): Task | null => {
-          if (!task || typeof task !== "object") {
-            return null;
-          }
-
-          const typed = task as Partial<Task>;
-          const createdAt = typeof typed.createdAt === "number" ? typed.createdAt : now();
-          const updatedAt = typeof typed.updatedAt === "number" ? typed.updatedAt : createdAt;
-          const status: TaskStatus =
-            typed.status === "backlog" ||
-            typed.status === "todo" ||
-            typed.status === "inprogress" ||
-            typed.status === "done"
-              ? typed.status
-              : "todo";
-          const priority =
-            typed.priority === "low" || typed.priority === "medium" || typed.priority === "high"
-              ? typed.priority
-              : "medium";
-
-          return {
-            id: typeof typed.id === "string" ? typed.id : makeId("task"),
-            title: typeof typed.title === "string" ? typed.title : "Untitled task",
-            priority,
-            status,
-            description: typeof typed.description === "string" ? typed.description : "",
-            links: Array.isArray(typed.links)
-              ? typed.links
-                  .filter((link) => link && typeof link === "object")
-                  .map((link) => ({
-                    label: typeof link.label === "string" ? link.label : "Link",
-                    href: typeof link.href === "string" ? link.href : "#"
-                  }))
-              : [],
-            checklist: Array.isArray(typed.checklist)
-              ? typed.checklist
-                  .filter((item) => item && typeof item === "object")
-                  .map((item) => ({
-                    id: typeof item.id === "string" ? item.id : makeId("check"),
-                    text: typeof item.text === "string" ? item.text : "",
-                    done: Boolean(item.done)
-                  }))
-              : [],
-            createdAt,
-            updatedAt
-          };
-        })
-        .filter((task): task is Task => task !== null)
-    : [];
-
-  const activity = Array.isArray(raw.activity)
-    ? raw.activity
-        .filter((item) => item && typeof item === "object")
-        .map((item) => {
-          const typed = item as Partial<ActivityItem>;
-          return {
-            id: typeof typed.id === "string" ? typed.id : makeId("act"),
-            type: typeof typed.type === "string" ? typed.type : "note",
-            message: typeof typed.message === "string" ? typed.message : "",
-            ts: typeof typed.ts === "number" ? typed.ts : now(),
-            taskId: typeof typed.taskId === "string" ? typed.taskId : undefined
-          };
-        })
-    : [];
-
-  return {
-    version: 1,
-    tasks,
-    docMarkdown: typeof raw.docMarkdown === "string" ? raw.docMarkdown : fallback.docMarkdown,
-    activity
-  };
 }
 
 export class ProjectControlStorage {
@@ -264,7 +166,7 @@ export class ProjectControlStorage {
   ): Promise<ProjectControlData> {
     const next = normalizeData(data);
     next.activity.unshift({
-      id: makeId("act"),
+      id: generateEntityId("act"),
       type,
       message,
       ts: now(),
@@ -283,14 +185,6 @@ export class ProjectControlStorage {
   }
 }
 
-export function sanitizeDocName(name: string): string {
-  const normalized = name.trim().replace(/[\\/:*?"<>|]/g, "-");
-  if (!normalized) {
-    return "notes.md";
-  }
-  return normalized.toLowerCase().endsWith(".md") ? normalized : `${normalized}.md`;
-}
-
 export function createTaskActivityMessage(title: string, status: TaskStatus): string {
   if (status === "inprogress") {
     return `Task started: ${title}`;
@@ -299,8 +193,4 @@ export function createTaskActivityMessage(title: string, status: TaskStatus): st
     return `Task completed: ${title}`;
   }
   return `Task moved to ${status}: ${title}`;
-}
-
-export function makeEntityId(prefix: string): string {
-  return makeId(prefix);
 }

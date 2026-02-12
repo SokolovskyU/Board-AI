@@ -1,7 +1,8 @@
 import * as assert from "assert";
+import { MAX_CHECKLIST_ITEMS_PER_TASK, MAX_TITLE_LENGTH } from "../projectControl/constraints";
+import { emptyData, normalizeData } from "../projectControl/dataModel";
 import { ingestPromptToTasks } from "../projectControl/ingest";
 import { processDataMessage } from "../projectControl/messages";
-import { emptyData, normalizeData } from "../projectControl/storage";
 
 suite("Project Control Core", () => {
   test("normalizeData fills defaults and sanitizes invalid fields", () => {
@@ -24,7 +25,8 @@ suite("Project Control Core", () => {
     assert.strictEqual(normalized.tasks[0].title, "Untitled task");
     assert.strictEqual(normalized.tasks[0].priority, "medium");
     assert.strictEqual(normalized.tasks[0].status, "todo");
-    assert.strictEqual(normalized.tasks[0].links[0].href, "#");
+    assert.strictEqual(normalized.tasks[0].links.length, 0);
+    assert.strictEqual(normalized.tasks[0].checklist.length, 0);
     assert.strictEqual(typeof normalized.docMarkdown, "string");
     assert.ok(normalized.activity.length > 0);
   });
@@ -68,5 +70,38 @@ suite("Project Control Core", () => {
     assert.ok(step.docWrite);
     assert.strictEqual(step.docWrite?.name, "design.md");
     assert.strictEqual(step.docWrite?.content, "doc body");
+  });
+
+  test("guardrails clamp title, validate links and dedupe checklist", () => {
+    let data = emptyData();
+    const longTitle = "A".repeat(MAX_TITLE_LENGTH + 50);
+    let step = processDataMessage(data, { type: "createTask", title: longTitle });
+    data = step.data;
+    const taskId = data.tasks[0].id;
+
+    step = processDataMessage(data, {
+      type: "updateTask",
+      taskId,
+      patch: {
+        title: longTitle,
+        links: [
+          { label: "Bad", href: "javascript:alert(1)" },
+          { label: "Good", href: "https://example.com" },
+          { label: "Dup", href: "https://example.com" }
+        ]
+      }
+    });
+    data = step.data;
+    assert.strictEqual(data.tasks[0].title.length, MAX_TITLE_LENGTH);
+    assert.strictEqual(data.tasks[0].links.length, 1);
+    assert.strictEqual(data.tasks[0].links[0].href, "https://example.com");
+
+    for (let i = 0; i < MAX_CHECKLIST_ITEMS_PER_TASK + 5; i += 1) {
+      step = processDataMessage(data, { type: "addChecklistItem", taskId, text: "Repeat" });
+      data = step.data;
+      step = processDataMessage(data, { type: "addChecklistItem", taskId, text: `Item ${i}` });
+      data = step.data;
+    }
+    assert.strictEqual(data.tasks[0].checklist.length, MAX_CHECKLIST_ITEMS_PER_TASK);
   });
 });

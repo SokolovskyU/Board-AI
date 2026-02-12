@@ -1,7 +1,9 @@
 import * as vscode from "vscode";
 import { ingestPromptToTasks } from "./projectControl/ingest";
 import { processDataMessage } from "./projectControl/messages";
-import { ProjectControlStorage, normalizeData, sanitizeDocName } from "./projectControl/storage";
+import { normalizeData } from "./projectControl/dataModel";
+import { ProjectControlStorage } from "./projectControl/storage";
+import { sanitizeDocName } from "./projectControl/utils";
 import { ProjectControlData } from "./projectControl/types";
 import { getProjectControlHtml } from "./projectControl/webview";
 
