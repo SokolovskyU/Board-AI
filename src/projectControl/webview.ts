@@ -159,8 +159,26 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         padding: 14px;
         overflow: auto;
       }
-      .details h2 { margin-top: 0; }
+      .details h2 { margin: 0 0 8px; }
       .meta { display: flex; gap: 8px; margin: 8px 0 10px; align-items: center; }
+      .details-section { margin-top: 10px; }
+      .details-section label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .detail-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 110px;
+        gap: 8px;
+        align-items: end;
+      }
+      .detail-actions {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+      }
       .mini-activity { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
       .act-item { font-size: 12px; color: #bfd0ea; padding: 6px 0; border-bottom: 1px solid #1f2a42; }
       .empty {
@@ -388,16 +406,18 @@ export function getProjectControlHtml(webview: vscode.Webview): string {
         host.innerHTML =
           '<h2>' + task.title + '</h2>' +
           '<div class="meta"><span class="pill ' + task.priority + '">' + task.priority + '</span><span class="muted">' + statusLabel[task.status] + '</span></div>' +
-          '<label>Title</label><input id="detail-title" value="' + task.title.replace(/"/g, "&quot;") + '" />' +
-          '<label>Priority</label><select id="detail-priority"><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select>' +
-          '<label>Description (Markdown)</label><textarea id="detail-description">' + (task.description || "") + '</textarea>' +
+          '<div class="details-section detail-grid">' +
+          '<div><label>Title</label><input id="detail-title" value="' + task.title.replace(/"/g, "&quot;") + '" /></div>' +
+          '<div><label>Priority</label><select id="detail-priority"><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></div>' +
+          '</div>' +
+          '<div class="details-section"><label>Description (Markdown)</label><textarea id="detail-description">' + (task.description || "") + '</textarea></div>' +
           '<div class="preview">' + markdownToHtml(task.description || "") + '</div>' +
-          '<label>Links (one per line: label|https://...)</label><textarea id="detail-links">' +
+          '<div class="details-section"><label>Links (one per line: label|https://...)</label><textarea id="detail-links">' +
           (task.links || []).map((link) => link.label + "|" + link.href).join("\\n") +
-          '</textarea>' +
+          '</textarea></div>' +
           '<div class="link-list">' + (task.links || []).map((link) => '<div><a href="' + link.href + '" target="_blank" rel="noreferrer">' + link.label + '</a></div>').join("") + '</div>' +
-          '<label>Checklist</label><div id="checklist"></div>' +
-          '<div class="row"><button class="btn" id="edit-task-btn">Edit</button><button class="btn danger" id="delete-task-btn">Delete</button><button class="btn" id="start-task-btn">Start</button><button class="btn" id="complete-task-btn">Complete</button></div>' +
+          '<div class="details-section"><label>Checklist</label><div id="checklist"></div></div>' +
+          '<div class="detail-actions"><button class="btn" id="edit-task-btn">Edit</button><button class="btn danger" id="delete-task-btn">Delete</button><button class="btn" id="start-task-btn">Start</button><button class="btn" id="complete-task-btn">Complete</button></div>' +
           '<div class="mini-activity"><strong>Mini activity</strong><div>' +
           (taskActivity.length
             ? taskActivity.map((item) => '<div class="act-item">' + formatTs(item.ts) + " - " + item.message + "</div>").join("")
