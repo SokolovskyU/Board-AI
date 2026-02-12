@@ -12,8 +12,10 @@ import { getProjectControlHtml } from "./projectControl/webview";
 
 let currentPanel: vscode.WebviewPanel | undefined;
 let sessionAutoOpened = false;
+let extensionCtx: vscode.ExtensionContext | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
+  extensionCtx = context;
   const openDisposable = vscode.commands.registerCommand("projectControl.open", async () => {
     await openProjectControlPanel(context, true);
   });
@@ -87,14 +89,23 @@ function getWorkspaceRoot(): vscode.Uri | undefined {
 }
 
 function getStorageOrNotify(notifyOnMissingWorkspace: boolean): ProjectControlStorage | undefined {
-  const root = getWorkspaceRoot();
-  if (!root) {
+  const workspaceRoot = getWorkspaceRoot();
+  if (workspaceRoot) {
+    return new ProjectControlStorage(workspaceRoot);
+  }
+
+  // Dev Host can start without folder; use extension root as local repo fallback.
+  if (extensionCtx?.extensionMode === vscode.ExtensionMode.Development) {
+    return new ProjectControlStorage(extensionCtx.extensionUri);
+  }
+
+  if (!workspaceRoot) {
     if (notifyOnMissingWorkspace) {
       void vscode.window.showWarningMessage("Project Control requires an opened workspace folder.");
     }
     return undefined;
   }
-  return new ProjectControlStorage(root);
+  return new ProjectControlStorage(workspaceRoot);
 }
 
 async function handleWebviewMessage(storage: ProjectControlStorage, message: any): Promise<void> {
